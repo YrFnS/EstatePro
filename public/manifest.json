@@ -1,0 +1,30 @@
+{
+  "name": "EstatePro - Real Estate Platform",
+  "short_name": "EstatePro",
+  "description": "Find your dream home with EstatePro. Browse properties, connect with agents, and make informed decisions.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#D4A853",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "lifestyle"],
+  "lang": "en",
+  "dir": "ltr",
+  "scope": "/",
+  "screenshots": [],
+  "prefer_related_applications": false
+}

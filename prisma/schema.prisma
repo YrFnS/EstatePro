@@ -1,0 +1,304 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Property {
+  id            String    @id @default(cuid())
+  titleEn       String
+  titleAr       String
+  descriptionEn String
+  descriptionAr String
+  price         Float
+  type          String    // apartment, villa, house, condo, townhouse, penthouse
+  status        String    // sale, rent
+  bedrooms      Int
+  bathrooms     Int
+  area          Float     // sqft
+  locationEn    String
+  locationAr    String
+  addressEn     String
+  addressAr     String
+  cityEn        String
+  cityAr        String
+  images        String    // comma-separated image URLs
+  features      String    // comma-separated features
+  yearBuilt     Int?
+  parking       Int       @default(0)
+  featured      Boolean   @default(false)
+  badge         String?   // new, hot, premium
+  lat           Float?
+  lng           Float?
+  virtualTourUrl String?  // URL for 360° virtual tour (Matterport, etc.)
+  virtualTourImages String? // comma-separated panoramic image URLs
+  agentId       String?
+  agent         Agent?    @relation(fields: [agentId], references: [id])
+  inquiries     Inquiry[]
+  reviews       Review[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Agent {
+  id              String     @id @default(cuid())
+  nameEn          String
+  nameAr          String
+  titleEn         String
+  titleAr         String
+  bioEn           String     @default("")
+  bioAr           String     @default("")
+  email           String     @unique
+  phone           String
+  image           String
+  specialization  String     // residential, commercial, rentals, luxury
+  experience      Int        // years
+  propertiesCount Int        @default(0)
+  rating          Float      @default(0)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  properties      Property[]
+}
+
+model Inquiry {
+  id         String    @id @default(cuid())
+  name       String
+  email      String
+  phone      String?
+  message    String
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String?
+  message   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id])
+  authorName String
+  rating     Int      @default(5)
+  comment    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
+
+model Tour {
+  id         String   @id @default(cuid())
+  propertyId String
+  name       String
+  email      String
+  phone      String
+  date       String
+  time       String
+  notes      String?
+  tourType   String   @default("in-person")
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ===== User & Authentication Models =====
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  password      String    // hashed password
+  role          String    @default("user") // admin, agent, user
+  avatar        String?
+  phone         String?
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+  conversationParticipants ConversationParticipant[]
+  messages      Message[]
+  commuteProfiles CommuteProfile[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              String  // oauth, credentials
+  provider          String  // google, github, credentials
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model VerificationToken {
+  identifier String   @id @default(cuid())
+  token      String   @unique
+  expires    DateTime
+  createdAt  DateTime @default(now())
+
+  @@unique([identifier, token])
+}
+
+// ===== Messaging Models =====
+
+model Conversation {
+  id         String    @id @default(cuid())
+  propertyId String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  participants ConversationParticipant[]
+  messages   Message[]
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt       DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id])
+  content        String
+  read           Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+// ===== Commute Calculator Models =====
+
+model CommuteProfile {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  destinationName String
+  destinationLat  Float
+  destinationLng  Float
+  transportMode   String   @default("driving") // driving, transit, walking, cycling
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ===== Admin & Settings Models =====
+
+model SiteSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique // e.g., "hero.title", "stats.propertiesSold", "market.avgPrice"
+  valueEn   String   // English value
+  valueAr   String   @default("") // Arabic value
+  category  String   @default("general") // general, hero, stats, market, footer, seo, contact
+  type      String   @default("text") // text, number, json, image, color, boolean
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model Testimonial {
+  id         String   @id @default(cuid())
+  authorEn   String
+  authorAr   String   @default("")
+  roleEn     String
+  roleAr     String   @default("")
+  contentEn  String
+  contentAr  String   @default("")
+  avatar     String   @default("")
+  rating     Int      @default(5)
+  featured   Boolean  @default(false)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Neighborhood {
+  id          String   @id @default(cuid())
+  nameEn      String
+  nameAr      String   @default("")
+  descEn      String
+  descAr      String   @default("")
+  avgPrice    String   @default("")
+  propertyCount Int    @default(0)
+  searchQuery String   @default("")
+  image       String   @default("")
+  featured    Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PropertyTypeConfig {
+  id          String   @id @default(cuid())
+  nameEn      String
+  nameAr      String   @default("")
+  type        String   @unique // apartment, villa, etc.
+  icon        String   @default("Building2") // lucide icon name
+  listingCount Int     @default(0)
+  featured    Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model MarketDataPoint {
+  id        String   @id @default(cuid())
+  label     String   // e.g., "Jan", "Q1", "2024"
+  value     Float    // price in thousands
+  period    String   @default("monthly") // monthly, quarterly, yearly
+  createdAt DateTime @default(now())
+}
+
+model MarketStat {
+  id          String   @id @default(cuid())
+  labelEn     String
+  labelAr     String   @default("")
+  value       String
+  change      String   @default("")
+  changeType  String   @default("up") // up, down, neutral
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

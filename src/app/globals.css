@@ -1,0 +1,698 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-arabic: var(--font-ibm-plex-arabic);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ============================================================
+   ESTATEPRO — Professional Real Estate Design System
+   
+   Aesthetic: Clean, professional, trust-first
+   Inspiration: Zillow, Bayut, Realtor.com
+   Color: Warm charcoal primary + amber/gold CTAs
+   Anti-patterns: No gradient text, no glassmorphism,
+   no shimmer, no floating effects, no 3D tilt
+   ============================================================ */
+
+:root {
+  --radius: 0.75rem;
+  
+  /* Pure white background */
+  --background: hsl(0, 0%, 100%);
+  /* Rich dark text */
+  --foreground: hsl(215, 25%, 10%);
+  /* White card surfaces */
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(215, 25%, 10%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(215, 25%, 10%);
+  /* Warm charcoal primary — professional, not teal/green */
+  --primary: hsl(215, 20%, 15%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  /* Warm neutral secondary */
+  --secondary: hsl(220, 14%, 96%);
+  --secondary-foreground: hsl(215, 25%, 10%);
+  /* Subtle muted tones */
+  --muted: hsl(220, 14%, 96%);
+  --muted-foreground: hsl(215, 10%, 45%);
+  /* Accent — warm amber/gold for CTAs and highlights */
+  --accent: hsl(38, 90%, 55%);
+  --accent-foreground: hsl(215, 20%, 15%);
+  /* Functional */
+  --destructive: hsl(0, 72%, 51%);
+  --border: hsl(220, 13%, 91%);
+  --input: hsl(220, 13%, 91%);
+  --ring: hsl(38, 90%, 55%);
+  
+  /* Chart colors — warm professional palette */
+  --chart-1: hsl(215, 20%, 15%);
+  --chart-2: hsl(38, 90%, 55%);
+  --chart-3: hsl(200, 15%, 45%);
+  --chart-4: hsl(350, 65%, 52%);
+  --chart-5: hsl(160, 30%, 40%);
+  
+  /* Sidebar */
+  --sidebar: hsl(220, 14%, 98%);
+  --sidebar-foreground: hsl(215, 25%, 10%);
+  --sidebar-primary: hsl(215, 20%, 15%);
+  --sidebar-primary-foreground: hsl(0, 0%, 100%);
+  --sidebar-accent: hsl(220, 14%, 96%);
+  --sidebar-accent-foreground: hsl(215, 25%, 10%);
+  --sidebar-border: hsl(220, 13%, 91%);
+  --sidebar-ring: hsl(38, 90%, 55%);
+  
+  /* Design tokens */
+  --gold: hsl(38, 90%, 55%);
+  --gold-foreground: hsl(215, 20%, 15%);
+  --gold-hover: hsl(38, 92%, 48%);
+  --charcoal: hsl(215, 20%, 15%);
+  --charcoal-light: hsl(215, 18%, 25%);
+  --warm-gray: hsl(220, 14%, 96%);
+}
+
+.dark {
+  /* Deep dark background */
+  --background: hsl(220, 20%, 10%);
+  /* Warm off-white text */
+  --foreground: hsl(38, 30%, 90%);
+  /* Slightly lighter dark surface */
+  --card: hsl(220, 15%, 14%);
+  --card-foreground: hsl(38, 30%, 90%);
+  --popover: hsl(220, 15%, 14%);
+  --popover-foreground: hsl(38, 30%, 90%);
+  /* Warm off-white primary for dark mode */
+  --primary: hsl(38, 30%, 85%);
+  --primary-foreground: hsl(220, 20%, 10%);
+  /* Dark secondary */
+  --secondary: hsl(220, 14%, 18%);
+  --secondary-foreground: hsl(38, 30%, 90%);
+  --muted: hsl(220, 14%, 18%);
+  --muted-foreground: hsl(220, 10%, 55%);
+  /* Same warm gold accent in dark mode */
+  --accent: hsl(38, 90%, 55%);
+  --accent-foreground: hsl(215, 20%, 15%);
+  --destructive: hsl(0, 72%, 55%);
+  --border: hsl(220, 14%, 20%);
+  --input: hsl(220, 14%, 20%);
+  --ring: hsl(38, 90%, 55%);
+  
+  --chart-1: hsl(38, 30%, 85%);
+  --chart-2: hsl(38, 90%, 55%);
+  --chart-3: hsl(200, 25%, 60%);
+  --chart-4: hsl(350, 65%, 60%);
+  --chart-5: hsl(160, 30%, 55%);
+  
+  --sidebar: hsl(220, 18%, 12%);
+  --sidebar-foreground: hsl(38, 30%, 90%);
+  --sidebar-primary: hsl(38, 30%, 85%);
+  --sidebar-primary-foreground: hsl(220, 20%, 10%);
+  --sidebar-accent: hsl(220, 14%, 18%);
+  --sidebar-accent-foreground: hsl(38, 30%, 90%);
+  --sidebar-border: hsl(220, 14%, 20%);
+  --sidebar-ring: hsl(38, 90%, 55%);
+  
+  /* Dark mode tokens */
+  --gold: hsl(38, 90%, 55%);
+  --gold-foreground: hsl(215, 20%, 15%);
+  --gold-hover: hsl(38, 92%, 48%);
+  --charcoal: hsl(38, 30%, 85%);
+  --charcoal-light: hsl(38, 25%, 75%);
+  --warm-gray: hsl(220, 14%, 18%);
+}
+
+/* ============================================================
+   BASE LAYER
+   ============================================================ */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ============================================================
+   TYPOGRAPHY — Editorial hierarchy
+   ============================================================ */
+
+h1, h2, h3, h4 {
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+h1 {
+  letter-spacing: -0.04em;
+  font-weight: 700;
+}
+
+h2 {
+  font-weight: 650;
+}
+
+h3 {
+  font-weight: 600;
+}
+
+/* Body text — comfortable reading */
+.text-body {
+  line-height: 1.7;
+  font-size: 0.9375rem;
+  text-wrap: pretty;
+  max-width: 65ch;
+}
+
+/* Label text */
+.text-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* ============================================================
+   SCROLLBAR — Minimal, tinted
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(220, 10%, 80%);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(220, 10%, 65%);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: hsl(220, 10%, 30%);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: hsl(220, 10%, 40%);
+}
+
+/* Inner scroll areas */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(220, 10%, 78%);
+  border-radius: 2px;
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(220, 10%, 28%);
+}
+
+/* ============================================================
+   FOCUS & SELECTION
+   ============================================================ */
+
+html {
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background: hsl(38, 90%, 55% / 20%);
+  color: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+  transition: outline-offset 0.15s ease;
+}
+
+/* Better focus ring for icon buttons */
+button:focus-visible:has(svg) {
+  outline-offset: 3px;
+  border-radius: 50%;
+}
+
+/* ============================================================
+   ANIMATIONS — Restrained, motivated
+   ============================================================ */
+
+/* Scroll reveal — the ONE animation we use consistently */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.7s cubic-bezier(0.32, 0.72, 0, 1),
+              transform 0.7s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Stagger children — for lists */
+.stagger-children > * {
+  opacity: 0;
+  animation: staggerIn 0.5s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.1s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.15s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.2s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.25s; }
+.stagger-children > *:nth-child(6) { animation-delay: 0.3s; }
+
+@keyframes staggerIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Tactile press — for buttons */
+.press {
+  transition: transform 0.15s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.press:active {
+  transform: scale(0.98);
+}
+
+/* Page transition — subtle, not flashy */
+.page-view-enter {
+  animation: pageIn 0.4s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Fade in — general purpose */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fadeIn 0.5s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+/* Slide up — general purpose */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slideUp 0.6s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+/* Slide in from start (left in LTR, right in RTL) */
+@keyframes slideInStart {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in-start {
+  animation: slideInStart 0.6s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+/* Scale in — for modals, popovers */
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-scale-in {
+  animation: scaleIn 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+/* Shimmer — left-to-right sweep for trust bar numbers */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.animate-shimmer {
+  background: linear-gradient(90deg, var(--gold) 0%, hsl(48, 96%, 70%) 50%, var(--gold) 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+/* Hero gradient overlay animation */
+@keyframes heroGradientShift {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 0.8; }
+}
+.animate-hero-gradient {
+  animation: heroGradientShift 8s ease-in-out infinite;
+}
+
+/* Dashed line animated fill for "How It Works" connectors */
+@keyframes dashFill {
+  to { stroke-dashoffset: 0; }
+}
+.animate-dash-fill {
+  stroke-dasharray: 8 4;
+  stroke-dashoffset: 100;
+  animation: dashFill 2s ease-in-out forwards;
+}
+
+/* Heart pulse animation */
+@keyframes heartPulse {
+  0% { transform: scale(1); }
+  25% { transform: scale(1.3); }
+  50% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+.animate-heart-pulse {
+  animation: heartPulse 0.4s ease-in-out;
+}
+
+/* Chart point hover glow */
+@keyframes chartGlow {
+  0%, 100% { r: 4; opacity: 1; }
+  50% { r: 6; opacity: 0.8; }
+}
+
+/* Navbar bottom border appear */
+@keyframes borderAppear {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .stagger-children > *,
+  .page-view-enter,
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-slide-in-start,
+  .animate-scale-in,
+  .animate-shimmer,
+  .animate-hero-gradient,
+  .animate-dash-fill,
+  .animate-heart-pulse {
+    animation: none !important;
+    transition: opacity 0.15s ease !important;
+    transform: none !important;
+  }
+  .reveal,
+  .stagger-children > * {
+    opacity: 1;
+  }
+  .animate-shimmer {
+    -webkit-text-fill-color: var(--gold);
+  }
+}
+
+/* ============================================================
+   COMPONENT UTILITIES — Editorial design system
+   ============================================================ */
+
+/* Section heading — left-aligned with accent line */
+.section-heading {
+  position: relative;
+  display: inline-block;
+  padding-bottom: 0.75rem;
+}
+.section-heading::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 40px;
+  height: 2px;
+  background: var(--gold);
+}
+[dir="rtl"] .section-heading::after {
+  left: auto;
+  right: 0;
+}
+
+/* Noise texture removed — professional sites don't use noise overlays */
+
+/* Gold accent button — for primary CTAs */
+.btn-gold {
+  background: var(--gold);
+  color: var(--gold-foreground);
+  font-weight: 600;
+  transition: background 0.25s ease, box-shadow 0.25s ease, transform 0.15s ease;
+}
+.btn-gold:hover {
+  background: var(--gold-hover);
+  box-shadow: 0 4px 16px hsl(38, 90%, 55% / 35%);
+}
+.btn-gold:active {
+  transform: scale(0.97);
+  box-shadow: 0 2px 8px hsl(38, 90%, 55% / 25%);
+}
+
+/* Double-bezel removed — use simple card borders instead */
+
+/* Stat number — large display style */
+.stat-number {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Card hover — clean lift + shadow, no tilt */
+.card-editorial {
+  transition: box-shadow 0.4s cubic-bezier(0.32, 0.72, 0, 1),
+              transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.card-editorial:hover {
+  box-shadow: 0 8px 30px hsl(215, 20%, 15% / 10%);
+  transform: translateY(-4px);
+}
+.dark .card-editorial:hover {
+  box-shadow: 0 8px 30px hsl(0, 0%, 0% / 40%);
+  transform: translateY(-4px);
+}
+
+/* Tag/pill — consistent shape */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px hsl(0, 0%, 0% / 12%);
+}
+
+/* Divider — subtle, warm */
+.warm-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, hsl(215, 10%, 80%), transparent);
+}
+.dark .warm-divider {
+  background: linear-gradient(90deg, transparent, hsl(220, 10%, 30%), transparent);
+}
+
+/* Horizontal smooth scroll */
+.scroll-x-smooth {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+.scroll-x-smooth::-webkit-scrollbar {
+  display: none;
+}
+
+/* ============================================================
+   PRINT
+   ============================================================ */
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}
+
+/* ============================================================
+   LEAFLET MAP OVERRIDES
+   ============================================================ */
+
+.custom-map-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.custom-marker {
+  background: none !important;
+  border: none !important;
+}
+
+.property-marker {
+  background: hsl(38, 90%, 55%);
+  color: hsl(215, 20%, 15%);
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  position: relative;
+  text-align: center;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.property-marker:hover {
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.property-marker.selected {
+  transform: scale(1.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  z-index: 1000 !important;
+}
+.property-marker::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid hsl(38, 90%, 55%);
+}
+.property-marker.selected::after {
+  border-top-color: hsl(38, 90%, 55%);
+}
+.property-marker.for-rent {
+  background: #3b82f6;
+  color: white;
+}
+.property-marker.for-rent::after {
+  border-top-color: #3b82f6;
+}
+.property-marker.for-sale {
+  background: hsl(142, 71%, 45%);
+  color: white;
+}
+.property-marker.for-sale::after {
+  border-top-color: hsl(142, 71%, 45%);
+}
+
+.dark .property-marker.for-sale {
+  background: hsl(142, 71%, 55%);
+}
+.dark .property-marker.for-sale::after {
+  border-top-color: hsl(142, 71%, 55%);
+}
+.dark .property-marker.for-rent {
+  background: #60a5fa;
+}
+.dark .property-marker.for-rent::after {
+  border-top-color: #60a5fa;
+}
+
+.property-map-popup .leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  padding: 0;
+  overflow: hidden;
+}
+.property-map-popup .leaflet-popup-content {
+  margin: 0;
+  padding: 0;
+  line-height: 1.4;
+}
+.property-map-popup .leaflet-popup-tip {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.dark .property-map-popup .leaflet-popup-content-wrapper {
+  background: hsl(220, 15%, 14%);
+  color: hsl(38, 30%, 90%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.dark .property-map-popup .leaflet-popup-tip {
+  background: hsl(220, 15%, 14%);
+}
+
+[dir="rtl"] .leaflet-control-zoom {
+  margin-left: 0;
+  margin-right: 10px;
+}
+[dir="rtl"] .leaflet-right .leaflet-control {
+  margin-right: 0;
+  margin-left: 10px;
+}
+
+.leaflet-container {
+  font-family: inherit;
+}
+.leaflet-tile-pane {
+  z-index: 1;
+}
+.leaflet-control-zoom {
+  display: none !important;
+}
+.leaflet-control-attribution {
+  font-size: 10px !important;
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(4px);
+}
+.dark .leaflet-control-attribution {
+  background: rgba(0, 0, 0, 0.5) !important;
+  color: #ccc !important;
+}
+.dark .leaflet-control-attribution a {
+  color: #8bc8e8 !important;
+}
