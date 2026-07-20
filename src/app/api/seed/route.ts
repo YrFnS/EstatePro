@@ -40,7 +40,7 @@ export async function POST() {
           "خبرة تزيد عن 15 عاماً في سوق العقارات، يتخصص جيمس في العقارات السكنية الفاخرة. عينه الثاقبة للتفاصيل ومعرفته العميقة بالسوق ساعدت عدد لا يحصى من العملاء في العثور على منازل أحلامهم.",
         email: "james@estatepro.com",
         phone: "+1 (555) 234-5678",
-        image: "https://placehold.co/200x200/d1fae5/059669?text=JW",
+        image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80",
         specialization: "luxury",
         experience: 15,
         propertiesCount: 87,
@@ -57,7 +57,7 @@ export async function POST() {
           "تجلب ماريا 10 سنوات من الخبرة في العقارات التجارية، وتساعد الشركات في العثور على موقعها المثالي. مهاراتها التفاوضية ورؤيتها للسوق تجعلها الوكيل المفضل للاستثمارات التجارية.",
         email: "maria@estatepro.com",
         phone: "+1 (555) 345-6789",
-        image: "https://placehold.co/200x200/d1fae5/059669?text=MG",
+        image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80",
         specialization: "commercial",
         experience: 10,
         propertiesCount: 64,
@@ -74,7 +74,7 @@ export async function POST() {
           "ساعد أحمد مئات العائلات في العثور على منازل أحلامهم بمعرفته العميقة بالسوق ونهجه الشخصي. يتحدث العربية والإنجليزية بطلاقة، ويخدم عملاء متنوعين في جميع أنحاء المنطقة.",
         email: "ahmed@estatepro.com",
         phone: "+1 (555) 456-7890",
-        image: "https://placehold.co/200x200/d1fae5/059669?text=AH",
+        image: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?auto=format&fit=crop&w=400&q=80",
         specialization: "residential",
         experience: 8,
         propertiesCount: 52,
@@ -91,7 +91,7 @@ export async function POST() {
           "تدير إيميلي محفظة واسعة من العقارات الإيجارية وتضمن تجربة سلسة للمالكين والمستأجرين. مهاراتها التنظيمية واهتمامها بالتفاصيل تجعل كل عملية إيجار سلسة.",
         email: "emily@estatepro.com",
         phone: "+1 (555) 567-8901",
-        image: "https://placehold.co/200x200/d1fae5/059669?text=ET",
+        image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
         specialization: "rentals",
         experience: 6,
         propertiesCount: 43,
@@ -115,31 +115,22 @@ export async function POST() {
     }
 
     // ===== 3. Seed Properties =====
+    const propertyPhotos = [
+      "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1600573472550-8090b5e0745e?auto=format&fit=crop&w=1400&q=80",
+    ];
+    const gallery = (offset: number) => Array.from(
+      { length: 4 },
+      (_, index) => propertyPhotos[(offset + index) % propertyPhotos.length],
+    ).join(",");
     const propertyImages = {
-      penthouseNY:
-        "/properties/penthouse-manhattan.png,/properties/apartment-brooklyn.png,/properties/condo-chicago.png,/properties/house-aspen.png",
-      villaBH:
-        "/properties/villa-beverly-hills.png,/properties/villa-dubai.png,/properties/villa-seattle.png,/properties/house-aspen.png",
-      condoMiami:
-        "/properties/condo-miami.png,/properties/apartment-marina.png,/properties/condo-chicago.png,/properties/apartment-sf.png",
-      townhouseChi:
-        "/properties/townhouse-chicago.png,/properties/house-austin.png,/properties/apartment-brooklyn.png,/properties/condo-chicago.png",
-      apartmentSF:
-        "/properties/apartment-sf.png,/properties/apartment-brooklyn.png,/properties/penthouse-manhattan.png,/properties/condo-chicago.png",
-      houseAustin:
-        "/properties/house-austin.png,/properties/villa-seattle.png,/properties/house-aspen.png,/properties/townhouse-chicago.png",
-      apartmentDubai:
-        "/properties/apartment-marina.png,/properties/villa-dubai.png,/properties/penthouse-manhattan.png,/properties/condo-miami.png",
-      studioSF:
-        "/properties/apartment-sf.png,/properties/apartment-brooklyn.png,/properties/condo-chicago.png,/properties/apartment-marina.png",
-      villaDubai:
-        "/properties/villa-dubai.png,/properties/villa-beverly-hills.png,/properties/villa-seattle.png,/properties/house-aspen.png",
-      loftNY:
-        "/properties/apartment-brooklyn.png,/properties/penthouse-manhattan.png,/properties/condo-chicago.png,/properties/apartment-sf.png",
-      waterfrontMiami:
-        "/properties/condo-miami.png,/properties/villa-seattle.png,/properties/house-aspen.png,/properties/villa-dubai.png",
-      penthouseLA:
-        "/properties/penthouse-la.png,/properties/villa-beverly-hills.png,/properties/condo-miami.png,/properties/apartment-marina.png",
+      penthouseNY: gallery(0), villaBH: gallery(1), condoMiami: gallery(2),
+      townhouseChi: gallery(3), apartmentSF: gallery(4), houseAustin: gallery(0),
+      apartmentDubai: gallery(1), studioSF: gallery(2), villaDubai: gallery(3),
+      loftNY: gallery(4), waterfrontMiami: gallery(0), penthouseLA: gallery(1),
     };
 
     const features = [
@@ -544,7 +535,7 @@ export async function POST() {
           "EstatePro made finding our dream home an absolute breeze. James was incredibly knowledgeable and patient, showing us properties that perfectly matched our criteria. We couldn't be happier with our new home!",
         contentAr:
           "جعلت EstatePro العثور على منزل أحلامنا أمراً سهلاً للغاية. كان جيمس على دراية كبيرة وصبوراً، وأرانا عقارات تطابق معاييرنا بشكل مثالي. لا يمكن أن نكون أسعد بمنزلنا الجديد!",
-        avatar: "https://placehold.co/80x80/d1fae5/059669?text=SM",
+        avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
         rating: 5,
         featured: true,
         sortOrder: 1,
@@ -558,7 +549,7 @@ export async function POST() {
           "As a property investor, I've worked with many agencies. EstatePro stands out for their market insights and professional approach. Maria helped me acquire two commercial properties that have shown excellent returns.",
         contentAr:
           "كمستثمر عقاري، عملت مع العديد من الوكالات. تتميز EstatePro برؤيتها للسوق ونهجها المهني. ساعدتني ماريا في الاستحواذ على عقارين تجاريين أظهرا عوائد ممتازة.",
-        avatar: "https://placehold.co/80x80/d1fae5/059669?text=RC",
+        avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
         rating: 5,
         featured: true,
         sortOrder: 2,
@@ -572,7 +563,7 @@ export async function POST() {
           "Finding the right commercial space was crucial for my business. Ahmed understood my requirements perfectly and found us an amazing location in record time. The entire process was seamless and stress-free.",
         contentAr:
           "كان العثور على المساحة التجارية المناسبة أمراً حاسماً لعملي. فهم أحمد متطلباتي بشكل مثالي ووجد لنا موقعاً مذهلاً في وقت قياسي. كانت العملية بأكملها سلسة وخالية من التوتر.",
-        avatar: "https://placehold.co/80x80/d1fae5/059669?text=FA",
+        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
         rating: 5,
         featured: true,
         sortOrder: 3,
@@ -586,7 +577,7 @@ export async function POST() {
           "As a first-time homebuyer, I was nervous about the process. Emily walked me through every step with patience and expertise. She made what could have been overwhelming feel manageable and even exciting!",
         contentAr:
           "كمشترٍ منزل لأول مرة، كنت متوتراً بشأن العملية. أرشدتني إيميلي في كل خطوة بصبر وخبرة. جعلت ما كان يمكن أن يكون مرهقاً يبدو قابلاً للإدارة ومثيراً حتى!",
-        avatar: "https://placehold.co/80x80/d1fae5/059669?text=DP",
+        avatar: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?auto=format&fit=crop&w=200&q=80",
         rating: 4,
         featured: true,
         sortOrder: 4,
@@ -600,7 +591,7 @@ export async function POST() {
           "I was looking for the perfect rental and EstatePro delivered. Their extensive listings and Emily's keen understanding of my needs helped me find a beautiful apartment in the heart of the city. Highly recommended!",
         contentAr:
           "كنت أبحث عن الإيجار المثالي وEstatePro قدمت ذلك. قوائمهم الواسعة وفهم إيميلي العميق لاحتياجاتي ساعداني في العثور على شقة جميلة في قلب المدينة. أنصح بشدة!",
-        avatar: "https://placehold.co/80x80/d1fae5/059669?text=LR",
+        avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
         rating: 5,
         featured: false,
         sortOrder: 5,
@@ -614,7 +605,7 @@ export async function POST() {
           "The level of service at EstatePro is unmatched. From the initial consultation to closing, every detail was handled with precision and care. They truly understand the luxury market and deliver exceptional results.",
         contentAr:
           "مستوى الخدمة في EstatePro لا مثيل له. من الاستشارة الأولى إلى الإغلاق، تم التعامل مع كل تفصيلة بدقة وعناية. إنهم يفهمون حقاً سوق الفخامة ويقدمون نتائج استثنائية.",
-        avatar: "https://placehold.co/80x80/d1fae5/059669?text=MB",
+        avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
         rating: 5,
         featured: true,
         sortOrder: 6,
@@ -628,7 +619,7 @@ export async function POST() {
           "Working with EstatePro on our latest development project was outstanding. Their team provided valuable market analysis and helped us position our properties perfectly. Sales exceeded our projections by 30%.",
         contentAr:
           "العمل مع EstatePro في أحدث مشروع تطويري لدينا كان مميزاً. قدم فريقهم تحليلاً قيماً للسوق وساعدنا في وضع عقاراتنا بشكل مثالي. تجاوزت المبيعات توقعاتنا بنسبة ٣٠٪.",
-        avatar: "https://placehold.co/80x80/d1fae5/059669?text=AM",
+        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
         rating: 5,
         featured: false,
         sortOrder: 7,
@@ -642,7 +633,7 @@ export async function POST() {
           "Relocating internationally seemed daunting, but EstatePro made it effortless. Their bilingual team and global network ensured I found the perfect home before I even arrived. Exceptional service from start to finish.",
         contentAr:
           "بدأ النقل الدولي مخيفاً، لكن EstatePro جعلته سهلاً. فريقهم ثنائي اللغة وشبكتهم العالمية ضمنت لي العثور على المنزل المثالي قبل حتى وصولي. خدمة استثنائية من البداية إلى النهاية.",
-        avatar: "https://placehold.co/80x80/d1fae5/059669?text=TA",
+        avatar: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?auto=format&fit=crop&w=200&q=80",
         rating: 4,
         featured: false,
         sortOrder: 8,
@@ -668,7 +659,7 @@ export async function POST() {
         avgPrice: "$450K - $1.2M",
         propertyCount: 186,
         searchQuery: "Downtown",
-        image: "/neighborhoods/downtown.jpg",
+        image: "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=1200&q=80",
         featured: true,
         sortOrder: 1,
       },
@@ -682,7 +673,7 @@ export async function POST() {
         avgPrice: "$680K - $2.5M",
         propertyCount: 124,
         searchQuery: "Waterfront",
-        image: "/neighborhoods/waterfront.jpg",
+        image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80",
         featured: true,
         sortOrder: 2,
       },
@@ -696,7 +687,7 @@ export async function POST() {
         avgPrice: "$320K - $750K",
         propertyCount: 245,
         searchQuery: "Suburbs",
-        image: "/neighborhoods/suburbs.jpg",
+        image: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=1200&q=80",
         featured: true,
         sortOrder: 3,
       },
@@ -710,7 +701,7 @@ export async function POST() {
         avgPrice: "$380K - $950K",
         propertyCount: 167,
         searchQuery: "Midtown",
-        image: "/neighborhoods/midtown.jpg",
+        image: "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80",
         featured: true,
         sortOrder: 4,
       },
