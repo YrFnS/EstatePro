@@ -5,6 +5,7 @@ import {
   useState,
   useMemo,
   useCallback,
+  useRef,
   useSyncExternalStore,
 } from "react";
 import dynamic from "next/dynamic";
@@ -178,279 +179,235 @@ function MapInner({
   const rectangleRef = useRef<any>(null);
 
   // Track dark mode
-  const isDark = useSyncExternalStore(
-    useCallback((callback: () => void) => {
-      const observer = new MutationObserver(callback);
-      observer.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ["class"],
-      });
-      return () => observer.disconnect();
-    }, []),
-    () => document.documentElement.classList.contains("dark"),
-    () => false
-  );
+  const [isDark, setIsDark] = useState(false);
 
-  const mappableProperties = useMemo(
-    () => properties.filter((p) => p.lat != null && p.lng != null),
+  useEffect(() => {
+    const checkDark = () =>
+      setIsDark(document.documentElement.classList.contains("dark"));
+    checkDark();
+    const observer = new MutationObserver(checkDark);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  const validProperties = useMemo(
+    () =>
+      properties.filter(
+        (p): p is MapProperty & { lat: number; lng: number } =>
+          typeof p.lat === "number" && typeof p.lng === "number"
+      ),
     [properties]
   );
 
-  // Calculate map center
-  const center = useMemo((): LatLngExpression => {
-    if (mappableProperties.length === 0) {
-      return [40.7128, -74.006]; // Default: NYC
+  const center = useMemo<LatLngExpression>(() => {
+    if (validProperties.length === 0) return [25.2048, 55.2708];
+    const lat =
+      validProperties.reduce((sum, property) => sum + property.lat, 0) /
+      validProperties.length;
+    const lng =
+      validProperties.reduce((sum, property) => sum + property.lng, 0) /
+      validProperties.length;
+    return [lat, lng];
+  }, [validProperties]);
+
+  useEffect(() => {
+    if (!mapInstance || !L) return;
+    if (validProperties.length === 1) {
+      mapInstance.setView(
+        [validProperties[0].lat, validProperties[0].lng],
+        13
+      );
+      return;
     }
-    const avgLat =
-      mappableProperties.reduce((sum, p) => sum + p.lat!, 0) /
-      mappableProperties.length;
-    const avgLng =
-      mappableProperties.reduce((sum, p) => sum + p.lng!, 0) /
-      mappableProperties.length;
-    return [avgLat, avgLng];
-  }, [mappableProperties]);
+    if (validProperties.length > 1) {
+      const bounds = L.latLngBounds(
+        validProperties.map((property) => [property.lat, property.lng])
+      );
+      mapInstance.fitBounds(bounds, { padding: [48, 48], maxZoom: 13 });
+    }
+  }, [mapInstance, validProperties]);
 
-  const zoom = mappableProperties.length <= 1 ? 13 : 11;
-
-  // Set map ref and fit bounds on load
-  const setMapRef = useCallback(
-    (map: any) => {
-      if (map && !mapInstance) {
-        setMapInstance(map);
-        if (mappableProperties.length > 1) {
-          const leaflet = L!;
-          const bounds: LatLngBounds = leaflet.latLngBounds(
-            mappableProperties.map((p) => [p.lat!, p.lng!])
-          );
-          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
-        }
-      }
-    },
-    [mappableProperties, mapInstance]
-  );
-
-  const handleZoomIn = useCallback(() => {
-    if (mapInstance) mapInstance.zoomIn();
-  }, [mapInstance]);
-
-  const handleZoomOut = useCallback(() => {
-    if (mapInstance) mapInstance.zoomOut();
-  }, [mapInstance]);
-
-  // Drawing interaction handlers
   useEffect(() => {
     if (!mapInstance || !L) return;
 
-    const leaflet = L;
+    if (rectangleRef.current) {
+      mapInstance.removeLayer(rectangleRef.current);
+      rectangleRef.current = null;
+    }
 
-    const onMouseDown = (e: any) => {
+    if (drawnAreaBounds) {
+      const bounds = L.latLngBounds(
+        [drawnAreaBounds.south, drawnAreaBounds.west],
+        [drawnAreaBounds.north, drawnAreaBounds.east]
+      );
+      rectangleRef.current = L.rectangle(bounds, {
+        color: "hsl(var(--primary))",
+        weight: 2,
+        fillColor: "hsl(var(--primary))",
+        fillOpacity: 0.08,
+      }).addTo(mapInstance);
+    }
+  }, [drawnAreaBounds, mapInstance]);
+
+  useEffect(() => {
+    if (!mapInstance || !L) return;
+
+    const container = mapInstance.getContainer();
+    container.style.cursor = isDrawing ? "crosshair" : "grab";
+
+    const onMouseDown = (event: any) => {
       if (!isDrawing) return;
       drawingRef.current = true;
-      startLatLngRef.current = e.latlng;
+      startLatLngRef.current = event.latlng;
+      mapInstance.dragging.disable();
+
       if (rectangleRef.current) {
         mapInstance.removeLayer(rectangleRef.current);
+        rectangleRef.current = null;
       }
-      rectangleRef.current = leaflet.rectangle([e.latlng, e.latlng], {
-        color: "hsl(38, 90%, 55%)",
-        weight: 2,
-        fillOpacity: 0.15,
-        dashArray: "6 4",
-      });
-      mapInstance.addLayer(rectangleRef.current);
-      mapInstance.dragging.disable();
     };
 
-    const onMouseMove = (e: any) => {
-      if (!drawingRef.current || !rectangleRef.current) return;
-      rectangleRef.current.setBounds([startLatLngRef.current, e.latlng]);
+    const onMouseMove = (event: any) => {
+      if (!drawingRef.current || !startLatLngRef.current) return;
+      const bounds = L!.latLngBounds(startLatLngRef.current, event.latlng);
+      if (rectangleRef.current) {
+        rectangleRef.current.setBounds(bounds);
+      } else {
+        rectangleRef.current = L!.rectangle(bounds, {
+          color: "hsl(var(--primary))",
+          weight: 2,
+          fillColor: "hsl(var(--primary))",
+          fillOpacity: 0.08,
+        }).addTo(mapInstance);
+      }
     };
 
-    const onMouseUp = () => {
-      if (!drawingRef.current) return;
+    const onMouseUp = (event: any) => {
+      if (!drawingRef.current || !startLatLngRef.current) return;
       drawingRef.current = false;
       mapInstance.dragging.enable();
-
-      if (rectangleRef.current && startLatLngRef.current) {
-        const bounds = rectangleRef.current.getBounds();
-        onDrawComplete({
-          north: bounds.getNorth(),
-          south: bounds.getSouth(),
-          east: bounds.getEast(),
-          west: bounds.getWest(),
-        });
-      }
+      const bounds = L!.latLngBounds(startLatLngRef.current, event.latlng);
+      startLatLngRef.current = null;
+      onDrawComplete({
+        north: bounds.getNorth(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        west: bounds.getWest(),
+      });
     };
 
-    if (isDrawing) {
-      mapInstance.on("mousedown", onMouseDown);
-      mapInstance.on("mousemove", onMouseMove);
-      mapInstance.on("mouseup", onMouseUp);
-      mapInstance.getContainer().style.cursor = "crosshair";
-    }
+    mapInstance.on("mousedown", onMouseDown);
+    mapInstance.on("mousemove", onMouseMove);
+    mapInstance.on("mouseup", onMouseUp);
 
     return () => {
       mapInstance.off("mousedown", onMouseDown);
       mapInstance.off("mousemove", onMouseMove);
       mapInstance.off("mouseup", onMouseUp);
-      mapInstance.getContainer().style.cursor = "";
-      mapInstance.dragging.enable();
+      if (!mapInstance.dragging.enabled()) mapInstance.dragging.enable();
     };
   }, [isDrawing, mapInstance, onDrawComplete]);
 
-  // Show drawn area rectangle
-  useEffect(() => {
-    if (!mapInstance || !L || !drawnAreaBounds) return;
+  const handleZoomIn = () => mapInstance?.zoomIn();
+  const handleZoomOut = () => mapInstance?.zoomOut();
 
-    const leaflet = L;
-    const rect = leaflet.rectangle(
-      [
-        [drawnAreaBounds.south, drawnAreaBounds.west],
-        [drawnAreaBounds.north, drawnAreaBounds.east],
-      ],
-      {
-        color: "hsl(38, 90%, 55%)",
-        weight: 2,
-        fillOpacity: 0.15,
-        dashArray: "6 4",
-      }
-    );
-    mapInstance.addLayer(rect);
-
-    return () => {
-      mapInstance.removeLayer(rect);
-    };
-  }, [drawnAreaBounds, mapInstance]);
-
-  // Tile URL - use dark tiles in dark mode
   const tileUrl = isDark
     ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
     : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-
-  const tileAttribution = isDark
-    ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-    : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-
-  if (mappableProperties.length === 0) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-muted/30">
-        <div className="text-center text-muted-foreground p-6">
-          <MapPin className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
-          <p className="text-sm font-medium">{t("mapView.noLocationData")}</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>
       <MapContainer
         center={center}
-        zoom={zoom}
-        scrollWheelZoom={true}
+        zoom={validProperties.length ? 11 : 4}
+        scrollWheelZoom
         zoomControl={false}
-        className="w-full h-full"
-        ref={setMapRef}
+        className="h-full w-full"
+        ref={(map) => {
+          if (map) setMapInstance(map);
+        }}
       >
-        <TileLayer url={tileUrl} attribution={tileAttribution} />
-
-        {/* Property markers */}
-        {mappableProperties.map((property) => {
-          const isSelected = selectedPropertyId === property.id;
-          const title =
-            locale === "ar" ? property.titleAr : property.titleEn;
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url={tileUrl}
+        />
+        {validProperties.map((property) => {
+          const selected = selectedPropertyId === property.id;
+          const title = locale === "ar" ? property.titleAr : property.titleEn;
           const location =
             locale === "ar" ? property.locationAr : property.locationEn;
-          const statusLabel =
-            property.status === "sale"
-              ? t("map.forSale")
-              : t("map.forRent");
-          const imageList = property.images ? property.images.split(",") : [];
-          const mainImage = imageList[0] || "";
+          const image = property.images
+            ?.split(",")
+            .map((item) => item.trim())
+            .find(Boolean);
 
           return (
             <Marker
               key={property.id}
-              position={[property.lat!, property.lng!]}
-              icon={createPriceIcon(property.price, property.status, isSelected)}
+              position={[property.lat, property.lng]}
+              icon={createPriceIcon(property.price, property.status, selected)}
               eventHandlers={{
-                click: () => {
-                  onPropertySelect?.(property.id);
-                },
+                click: () => onPropertySelect?.(property.id),
               }}
             >
-              <Popup className="property-map-popup" maxWidth={280}>
-                <div
-                  className="p-2"
-                  style={{ direction: locale === "ar" ? "rtl" : "ltr" }}
-                >
-                  {mainImage && (
-                    <div className="w-full h-28 rounded-md overflow-hidden mb-2">
-                      <img
-                        src={mainImage}
-                        alt={title}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  )}
-                  <h3 className="font-semibold text-sm text-foreground mb-1 truncate">
-                    {title}
-                  </h3>
-                  {location && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1.5">
-                      <MapPin className="w-3 h-3 shrink-0" />
-                      <span className="truncate">{location}</span>
-                    </p>
-                  )}
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm font-bold text-primary">
+              <Popup minWidth={230}>
+                <div className="space-y-2 p-1">
+                  {image ? (
+                    <img
+                      src={image}
+                      alt={title}
+                      className="h-28 w-full rounded-lg object-cover"
+                    />
+                  ) : null}
+                  <div>
+                    <p className="line-clamp-2 font-semibold">{title}</p>
+                    {location ? (
+                      <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                        <MapPin className="h-3 w-3" />
+                        {location}
+                      </p>
+                    ) : null}
+                    <p className="mt-2 text-base font-bold text-primary">
                       {t("common.currency")}
                       {property.price.toLocaleString()}
-                      {property.status === "rent" && (
-                        <span className="text-xs font-normal text-muted-foreground">
-                          {t("common.perMonth")}
-                        </span>
-                      )}
-                    </span>
-                    <Badge
-                      variant="secondary"
-                      className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary"
-                    >
-                      {statusLabel}
-                    </Badge>
+                    </p>
+                    {(property.bedrooms || property.bathrooms || property.area) && (
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        {property.bedrooms ? (
+                          <span className="flex items-center gap-0.5">
+                            <Bed className="h-3 w-3" />
+                            {property.bedrooms}
+                          </span>
+                        ) : null}
+                        {property.bathrooms ? (
+                          <span className="flex items-center gap-0.5">
+                            <Bath className="h-3 w-3" />
+                            {property.bathrooms}
+                          </span>
+                        ) : null}
+                        {property.area ? (
+                          <span className="flex items-center gap-0.5">
+                            <Maximize className="h-3 w-3" />
+                            {property.area} {t("common.sqft")}
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
+                    {navigate ? (
+                      <Button
+                        size="sm"
+                        className="mt-3 h-8 w-full text-xs"
+                        onClick={() =>
+                          navigate("property-detail", { id: property.id })
+                        }
+                      >
+                        {t("common.viewDetails")}
+                      </Button>
+                    ) : null}
                   </div>
-                  {(property.bedrooms || property.bathrooms || property.area) && (
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                      {property.bedrooms && (
-                        <span className="flex items-center gap-0.5">
-                          <Bed className="w-3 h-3" />
-                          {property.bedrooms}
-                        </span>
-                      )}
-                      {property.bathrooms && (
-                        <span className="flex items-center gap-0.5">
-                          <Bath className="w-3 h-3" />
-                          {property.bathrooms}
-                        </span>
-                      )}
-                      {property.area && (
-                        <span className="flex items-center gap-0.5">
-                          <Maximize className="w-3 h-3" />
-                          {property.area} {t("common.sqft")}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {navigate && (
-                    <Button
-                      size="sm"
-                      className="w-full mt-2 h-7 text-xs"
-                      onClick={() =>
-                        navigate("property-detail", { id: property.id })
-                      }
-                    >
-                      {t("common.viewDetails")}
-                    </Button>
-                  )}
                 </div>
               </Popup>
             </Marker>
@@ -458,65 +415,58 @@ function MapInner({
         })}
       </MapContainer>
 
-      {/* Custom Zoom Controls */}
-      <div className="absolute top-3 start-3 z-[1000] flex flex-col gap-1">
+      <div className="absolute start-3 top-3 z-[1000] flex flex-col gap-1">
         <Button
           variant="secondary"
           size="icon"
-          className="h-9 w-9 shadow-md bg-background/90 backdrop-blur-sm"
+          className="h-9 w-9 bg-background/90 shadow-md backdrop-blur-sm"
           onClick={handleZoomIn}
           aria-label={t("map.zoomIn")}
         >
-          <ZoomIn className="w-4 h-4" />
+          <ZoomIn className="h-4 w-4" />
         </Button>
         <Button
           variant="secondary"
           size="icon"
-          className="h-9 w-9 shadow-md bg-background/90 backdrop-blur-sm"
+          className="h-9 w-9 bg-background/90 shadow-md backdrop-blur-sm"
           onClick={handleZoomOut}
           aria-label={t("map.zoomOut")}
         >
-          <ZoomOut className="w-4 h-4" />
+          <ZoomOut className="h-4 w-4" />
         </Button>
       </div>
 
-      {/* Property count badge */}
-      {mappableProperties.length > 0 && (
-        <div className="absolute top-3 end-3 z-[1000]">
+      {validProperties.length > 0 ? (
+        <div className="absolute end-3 top-3 z-[1000]">
           <Badge
             variant="secondary"
-            className="bg-background/90 backdrop-blur-sm shadow-md gap-1"
+            className="gap-1 bg-background/90 shadow-md backdrop-blur-sm"
           >
-            <MapPin className="w-3 h-3" />
-            {mappableProperties.length} {t("properties.results")}
+            <MapPin className="h-3 w-3" />
+            {validProperties.length} {t("properties.results")}
           </Badge>
         </div>
-      )}
+      ) : null}
 
-      {/* Drawing instructions overlay */}
-      {isDrawing && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-background/95 backdrop-blur-sm shadow-lg rounded-xl px-4 py-3 border flex items-center gap-2">
-          <Pencil className="w-4 h-4 text-primary" />
+      {isDrawing ? (
+        <div className="absolute bottom-4 left-1/2 z-[1000] flex -translate-x-1/2 items-center gap-2 rounded-xl border bg-background/95 px-4 py-3 shadow-lg backdrop-blur-sm">
+          <Pencil className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium">
             {t("mapView.drawInstructions")}
           </span>
         </div>
-      )}
+      ) : null}
     </>
   );
 }
 
-// ──────────────────────── Loading Skeleton ────────────────────────
-
 function MapSkeleton({ height }: { height: string }) {
   return (
-    <div style={{ height }} className="rounded-xl overflow-hidden">
-      <Skeleton className="w-full h-full" />
+    <div style={{ height }} className="overflow-hidden rounded-xl">
+      <Skeleton className="h-full w-full" />
     </div>
   );
 }
-
-// ──────────────────────── Main Export Component ────────────────────────
 
 export function InteractivePropertyMap({
   properties,
@@ -529,17 +479,14 @@ export function InteractivePropertyMap({
   locale,
   navigate,
 }: InteractivePropertyMapProps) {
-  // Track client-side availability
   const isClient = useSyncExternalStore(
     useCallback(() => () => {}, []),
     () => true,
     () => false
   );
-
   const [isDrawing, setIsDrawing] = useState(false);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
 
-  // Load Leaflet on mount
   useEffect(() => {
     getLeaflet().then(() => setLeafletLoaded(true));
   }, []);
@@ -562,7 +509,7 @@ export function InteractivePropertyMap({
   }, [onDrawnAreaChange]);
 
   const mappableProperties = useMemo(
-    () => properties.filter((p) => p.lat != null && p.lng != null),
+    () => properties.filter((property) => property.lat != null && property.lng != null),
     [properties]
   );
 
@@ -571,9 +518,8 @@ export function InteractivePropertyMap({
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-0 h-full">
-      {/* Map Area */}
-      <div className={`relative ${height} lg:flex-1 rounded-xl overflow-hidden border bg-background`}>
+    <div className="flex h-full flex-col gap-4 lg:flex-row">
+      <div className={`relative ${height} overflow-hidden rounded-xl border bg-background lg:flex-1`}>
         <MapInner
           properties={properties}
           onPropertySelect={onPropertySelect}
@@ -587,52 +533,46 @@ export function InteractivePropertyMap({
         />
       </div>
 
-      {/* Side Panel - Property List */}
-      <div className="w-full lg:w-80 shrink-0 border rounded-xl bg-background overflow-hidden flex flex-col mt-4 lg:mt-0 lg:ms-4">
-        {/* Panel Header */}
-        <div className="p-3 border-b bg-muted/30">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-sm flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-primary" />
-              {drawnAreaBounds
-                ? t("mapView.propertiesInArea").replace(
-                    "{count}",
-                    String(mappableProperties.length)
-                  )
-                : `${mappableProperties.length} ${t("properties.results")}`}
-            </h3>
-          </div>
-          {/* Draw Search Area button */}
-          <div className="flex items-center gap-2 mt-2">
+      <div className="flex w-full shrink-0 flex-col overflow-hidden rounded-xl border bg-background lg:w-80">
+        <div className="border-b bg-muted/30 p-3">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <MapPin className="h-4 w-4 text-primary" />
+            {drawnAreaBounds
+              ? t("mapView.propertiesInArea").replace(
+                  "{count}",
+                  String(mappableProperties.length)
+                )
+              : `${mappableProperties.length} ${t("properties.results")}`}
+          </h3>
+          <div className="mt-2 flex items-center gap-2">
             <Button
               variant={isDrawing ? "default" : "outline"}
               size="sm"
-              className="flex-1 gap-1.5 h-8 text-xs"
-              onClick={() => setIsDrawing(!isDrawing)}
+              className="h-8 flex-1 gap-1.5 text-xs"
+              onClick={() => setIsDrawing((value) => !value)}
             >
-              <Pencil className="w-3.5 h-3.5" />
+              <Pencil className="h-3.5 w-3.5" />
               {t("mapView.drawArea")}
             </Button>
-            {drawnAreaBounds && (
+            {drawnAreaBounds ? (
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5 h-8 text-xs"
+                className="h-8 gap-1.5 text-xs"
                 onClick={handleClearDrawnArea}
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <RotateCcw className="h-3.5 w-3.5" />
                 {t("mapView.clearArea")}
               </Button>
-            )}
+            ) : null}
           </div>
         </div>
 
-        {/* Property List */}
-        <ScrollArea className="flex-1 max-h-[460px]">
-          <div className="p-2 space-y-2">
+        <ScrollArea className="max-h-[520px] flex-1">
+          <div className="space-y-2 p-2">
             {mappableProperties.length === 0 ? (
-              <div className="text-center py-8 px-4">
-                <MapPin className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
+              <div className="px-4 py-8 text-center">
+                <MapPin className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
                 <p className="text-sm text-muted-foreground">
                   {drawnAreaBounds
                     ? t("mapView.noPropertiesInArea")
@@ -641,85 +581,78 @@ export function InteractivePropertyMap({
               </div>
             ) : (
               mappableProperties.map((property) => {
-                const title =
-                  locale === "ar" ? property.titleAr : property.titleEn;
+                const title = locale === "ar" ? property.titleAr : property.titleEn;
                 const location =
-                  locale === "ar"
-                    ? property.locationAr
-                    : property.locationEn;
-                const isSelected = selectedPropertyId === property.id;
-                const imageList = property.images
-                  ? property.images.split(",")
-                  : [];
-                const mainImage = imageList[0] || "";
+                  locale === "ar" ? property.locationAr : property.locationEn;
+                const selected = selectedPropertyId === property.id;
+                const image = property.images
+                  ?.split(",")
+                  .map((item) => item.trim())
+                  .find(Boolean);
 
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={property.id}
                     onClick={() => onPropertySelect?.(property.id)}
-                    className={`cursor-pointer rounded-lg border p-2 transition-all duration-200 ${
-                      isSelected
+                    className={`w-full rounded-lg border p-2 text-start transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                      selected
                         ? "border-primary bg-primary/5 ring-1 ring-primary/30"
                         : "hover:border-primary/30 hover:bg-muted/30"
                     }`}
                   >
                     <div className="flex gap-2">
-                      {mainImage && (
-                        <div className="w-16 h-16 rounded-md overflow-hidden shrink-0">
-                          <img
-                            src={mainImage}
-                            alt={title}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm truncate">
-                          {title}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                          <MapPin className="w-3 h-3 shrink-0" />
+                      {image ? (
+                        <img
+                          src={image}
+                          alt={title}
+                          className="h-16 w-16 shrink-0 rounded-md object-cover"
+                        />
+                      ) : null}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">{title}</p>
+                        <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                          <MapPin className="h-3 w-3 shrink-0" />
                           {location}
                         </p>
-                        <div className="flex items-center justify-between mt-1">
+                        <div className="mt-1 flex items-center justify-between gap-2">
                           <span className="text-sm font-bold text-primary">
                             {t("common.currency")}
                             {property.price.toLocaleString()}
-                            {property.status === "rent" && (
+                            {property.status === "rent" ? (
                               <span className="text-xs font-normal text-muted-foreground">
                                 /mo
                               </span>
-                            )}
+                            ) : null}
                           </span>
                           <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                            {property.bedrooms && (
+                            {property.bedrooms ? (
                               <span className="flex items-center gap-0.5">
-                                <Bed className="w-3 h-3" />
+                                <Bed className="h-3 w-3" />
                                 {property.bedrooms}
                               </span>
-                            )}
-                            {property.bathrooms && (
+                            ) : null}
+                            {property.bathrooms ? (
                               <span className="flex items-center gap-0.5">
-                                <Bath className="w-3 h-3" />
+                                <Bath className="h-3 w-3" />
                                 {property.bathrooms}
                               </span>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 );
               })
             )}
           </div>
         </ScrollArea>
 
-        {/* View Details Button for selected property */}
-        {selectedPropertyId && navigate && (
+        {selectedPropertyId && navigate ? (
           <div className="border-t p-3">
             <Button
-              className="w-full gap-2"
+              className="w-full"
               onClick={() =>
                 navigate("property-detail", { id: selectedPropertyId })
               }
@@ -727,7 +660,7 @@ export function InteractivePropertyMap({
               {t("common.viewDetails")}
             </Button>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
