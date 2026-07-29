@@ -1,41 +1,25 @@
 // ============================================================================
 // Settings Helper Module
-// Provides SERVER-SIDE functions to fetch settings from the database
-// and a DEFAULTS constant for client-side fallback values
-//
-// IMPORTANT: The async functions in this file (getSetting, getSettings, getSettingsByGroup)
-// can ONLY be used in server-side code (API routes, server components, server actions).
-// They import db which uses fs/path and cannot be bundled for the client.
-//
-// For client-side code, use the useSettings hook from @/lib/use-settings instead.
+// Provides SERVER-SIDE functions to fetch SiteSetting values from Prisma and a
+// DEFAULTS constant for safe fallbacks. Client components should use the
+// dedicated settings hook instead of importing the database helpers below.
 // ============================================================================
 
-/**
- * Default settings values for client-side fallback when settings
- * haven't been loaded yet or are missing from the database.
- */
 export const SETTINGS_DEFAULTS: Record<string, string> = {
-  // General Group
   app_name: "EstatePro",
   app_description: "Discover your perfect property with EstatePro",
   site_url: "https://estatepro.app",
   founding_year: "2010",
-
-  // Contact Group
   contact_address: "123 Real Estate Ave, Suite 100\nNew York, NY 10001",
   contact_phone: "+1 (555) 123-4567",
   contact_email: "info@estatepro.com",
   contact_lat: "40.720",
   contact_lng: "-73.990",
-
-  // Social Group
   social_facebook: "#",
   social_twitter: "#",
   social_instagram: "#",
   social_linkedin: "#",
   social_youtube: "#",
-
-  // Hero/Stats Group
   hero_stat_properties_sold: "12K+",
   hero_stat_customer_rating: "98%",
   hero_stat_expert_agents: "250+",
@@ -48,8 +32,6 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   testimonial_name_ar: "سارة جونسون",
   testimonial_role_en: "Home Buyer",
   testimonial_role_ar: "مشتري منزل",
-
-  // Market Group
   market_avg_home_price: "$685,000",
   market_avg_home_price_change: "+5.2%",
   market_inventory: "2,450",
@@ -66,42 +48,38 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   market_inventory_level_change: "-3.2%",
   market_activity_score: "78",
   market_activity_score_change: "5.1%",
-
-  // Mortgage Group
   mortgage_default_rate: "6.5",
   mortgage_default_term: "30",
   mortgage_default_down: "20",
-
-  // Appearance Group
   placeholder_image:
     "https://placehold.co/800x600/e2e8f0/64748b?text=No+Image",
 };
 
-/**
- * Get a single setting value by key (SERVER-SIDE ONLY)
- */
+/** Get a single English setting value by key (server-side only). */
 export async function getSetting(key: string): Promise<string | null> {
   const { db } = await import("@/lib/db");
-  const setting = await db.setting.findUnique({ where: { key } });
-  return setting?.value ?? null;
+  const setting = await db.siteSetting.findUnique({ where: { key } });
+  return setting?.valueEn ?? null;
 }
 
-/**
- * Get all settings as a key-value map (SERVER-SIDE ONLY)
- */
+/** Get all English setting values as a key-value map (server-side only). */
 export async function getSettings(): Promise<Record<string, string>> {
   const { db } = await import("@/lib/db");
-  const settings = await db.setting.findMany();
-  return Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const settings = await db.siteSetting.findMany();
+  return Object.fromEntries(
+    settings.map((setting) => [setting.key, setting.valueEn])
+  );
 }
 
-/**
- * Get settings filtered by group as a key-value map (SERVER-SIDE ONLY)
- */
+/** Get English settings filtered by category (server-side only). */
 export async function getSettingsByGroup(
   group: string
 ): Promise<Record<string, string>> {
   const { db } = await import("@/lib/db");
-  const settings = await db.setting.findMany({ where: { group } });
-  return Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const settings = await db.siteSetting.findMany({
+    where: { category: group },
+  });
+  return Object.fromEntries(
+    settings.map((setting) => [setting.key, setting.valueEn])
+  );
 }
