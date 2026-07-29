@@ -1,20 +1,26 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
 import {
-  Maximize,
-  Minimize,
-  RotateCcw,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
   ChevronLeft,
   ChevronRight,
+  Maximize,
+  Minimize,
   Move,
-  ZoomIn,
   Pause,
   Play,
+  RotateCcw,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n/provider";
+import { Button } from "@/components/ui/button";
 
 interface PanoramicViewerProps {
   images: string[];
@@ -22,375 +28,298 @@ interface PanoramicViewerProps {
   roomLabels?: string[];
   className?: string;
   onOpenFullTour?: () => void;
-  /** When provided, viewer switches to this image index */
   activeIndex?: number;
-  /** Callback when the user navigates to a different image */
+  startIndex?: number;
   onIndexChange?: (index: number) => void;
+}
+
+function clampIndex(index: number, length: number): number {
+  if (length <= 0) return 0;
+  return Math.max(0, Math.min(length - 1, index));
 }
 
 export function PanoramicViewer({
   images,
   autoRotate = true,
-  roomLabels,
+  roomLabels = [],
   className = "",
   onOpenFullTour,
   activeIndex,
+  startIndex = 0,
   onIndexChange,
 }: PanoramicViewerProps) {
-  const { t } = useI18n();
-  const [internalIndex, setInternalIndex] = useState(0);
-  const currentIndex = activeIndex ?? internalIndex;
+  const { t, locale } = useI18n();
+  const [internalIndex, setInternalIndex] = useState(() =>
+    clampIndex(startIndex, images.length)
+  );
   const [rotation, setRotation] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [autoRotating, setAutoRotating] = useState(autoRotate);
-  const [showHint, setShowHint] = useState(true);
-  const lastPos = useRef({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const [rotating, setRotating] = useState(autoRotate);
+  const [fullscreen, setFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const animationRef = useRef<number | null>(null);
-  const autoRotateSpeed = useRef(0.15);
+  const lastPointer = useRef({ x: 0, y: 0 });
+  const animationFrame = useRef<number | null>(null);
+  const lastAnimationTime = useRef<number | null>(null);
 
-  // Auto-rotation animation
+  const currentIndex = useMemo(
+    () => clampIndex(activeIndex ?? internalIndex, images.length),
+    [activeIndex, images.length, internalIndex]
+  );
+  const currentImage = images[currentIndex] || "";
+  const roomLabel =
+    roomLabels[currentIndex] ||
+    `${locale === "ar" ? "الغرفة" : "Room"} ${currentIndex + 1}`;
+
+  const changeIndex = useCallback(
+    (nextIndex: number) => {
+      if (!images.length) return;
+      const normalized = ((nextIndex % images.length) + images.length) % images.length;
+      setInternalIndex(normalized);
+      setRotation({ x: 0, y: 0 });
+      setZoom(1);
+      onIndexChange?.(normalized);
+    },
+    [images.length, onIndexChange]
+  );
+
   useEffect(() => {
-    if (!autoRotating || isDragging || isFullscreen) {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
+    if (!rotating || dragging || !images.length) {
+      if (animationFrame.current != null) {
+        cancelAnimationFrame(animationFrame.current);
+        animationFrame.current = null;
       }
+      lastAnimationTime.current = null;
       return;
     }
 
-    let lastTime = performance.now();
     const animate = (time: number) => {
-      const delta = time - lastTime;
-      lastTime = time;
-      setRotation((prev) => ({
-        x: prev.x,
-        y: prev.y + autoRotateSpeed.current * (delta / 16),
+      const previous = lastAnimationTime.current ?? time;
+      const delta = Math.min(50, time - previous);
+      lastAnimationTime.current = time;
+      setRotation((current) => ({
+        ...current,
+        y: current.y + delta * 0.012,
       }));
-      animationRef.current = requestAnimationFrame(animate);
+      animationFrame.current = requestAnimationFrame(animate);
     };
 
-    animationRef.current = requestAnimationFrame(animate);
+    animationFrame.current = requestAnimationFrame(animate);
     return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
+      if (animationFrame.current != null) {
+        cancelAnimationFrame(animationFrame.current);
       }
+      animationFrame.current = null;
+      lastAnimationTime.current = null;
     };
-  }, [autoRotating, isDragging, isFullscreen]);
+  }, [dragging, images.length, rotating]);
 
-  // Hide hint after 4 seconds
-  useEffect(() => {
-    const timer = setTimeout(() => setShowHint(false), 4000);
-    return () => clearTimeout(timer);
-  }, [currentIndex]);
-
-  // Handle image load - use ref to avoid setState in effect
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const imageLoadRef = useRef(false);
-
-  useEffect(() => {
-    imageLoadRef.current = false;
-    const img = new Image();
-    img.onload = () => {
-      imageLoadRef.current = true;
-      setImageLoaded(true);
-    };
-    img.src = images[currentIndex];
-    return () => {
-      imageLoadRef.current = false;
-    };
-  }, [currentIndex, images]);
-
-  // Fullscreen change listener
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      setFullscreen(document.fullscreenElement === containerRef.current);
     };
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () =>
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
-  // Mouse handlers
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      setIsDragging(true);
-      lastPos.current = { x: e.clientX, y: e.clientY };
-      setAutoRotating(false);
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    },
-    []
-  );
-
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!isDragging) return;
-      const deltaX = e.clientX - lastPos.current.x;
-      const deltaY = e.clientY - lastPos.current.y;
-      lastPos.current = { x: e.clientX, y: e.clientY };
-
-      setRotation((prev) => ({
-        x: Math.max(-30, Math.min(30, prev.x - deltaY * 0.3)),
-        y: prev.y + deltaX * 0.3,
-      }));
-    },
-    [isDragging]
-  );
-
-  const handlePointerUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  // Scroll to zoom
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    setZoom((prev) => Math.max(1, Math.min(3, prev - e.deltaY * 0.002)));
-  }, []);
-
-  // Double-click to reset
-  const handleDoubleClick = useCallback(() => {
-    setRotation({ x: 0, y: 0 });
-    setZoom(1);
-  }, []);
-
-  // Toggle fullscreen
-  const toggleFullscreen = useCallback(() => {
-    if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch(() => {});
-    } else {
-      document.exitFullscreen().catch(() => {});
-    }
-  }, []);
-
-  // Navigation
-  const goToImage = useCallback(
-    (index: number) => {
-      if (index < 0 || index >= images.length) return;
-      setInternalIndex(index);
-      setRotation({ x: 0, y: 0 });
-      setZoom(1);
-      onIndexChange?.(index);
-    },
-    [images.length, onIndexChange]
-  );
-
-  const prevImage = useCallback(() => {
-    goToImage(currentIndex > 0 ? currentIndex - 1 : images.length - 1);
-  }, [currentIndex, images.length, goToImage]);
-
-  const nextImage = useCallback(() => {
-    goToImage(currentIndex < images.length - 1 ? currentIndex + 1 : 0);
-  }, [currentIndex, images.length, goToImage]);
-
-  // Keyboard navigation
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") prevImage();
-      else if (e.key === "ArrowRight") nextImage();
-      else if (e.key === "Escape" && isFullscreen) {
-        document.exitFullscreen().catch(() => {});
-      } else if (e.key === "f") {
-        toggleFullscreen();
-      } else if (e.key === "r") {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!containerRef.current?.contains(document.activeElement) && !fullscreen) return;
+      if (event.key === "ArrowLeft") changeIndex(currentIndex - 1);
+      if (event.key === "ArrowRight") changeIndex(currentIndex + 1);
+      if (event.key.toLowerCase() === "r") {
         setRotation({ x: 0, y: 0 });
         setZoom(1);
-      } else if (e.key === " ") {
-        e.preventDefault();
-        setAutoRotating((prev) => !prev);
+      }
+      if (event.key === " ") {
+        event.preventDefault();
+        setRotating((current) => !current);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [prevImage, nextImage, isFullscreen, toggleFullscreen]);
+  }, [changeIndex, currentIndex, fullscreen]);
 
-  // Touch gesture support - pinch to zoom
-  const lastTouchDistance = useRef<number | null>(null);
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      lastTouchDistance.current = Math.sqrt(dx * dx + dy * dy);
+  const toggleFullscreen = async () => {
+    if (!containerRef.current) return;
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await containerRef.current.requestFullscreen();
+    } catch {
+      onOpenFullTour?.();
     }
-  }, []);
+  };
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 2 && lastTouchDistance.current !== null) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      const delta = distance - lastTouchDistance.current;
-      lastTouchDistance.current = distance;
-      setZoom((prev) => Math.max(1, Math.min(3, prev + delta * 0.005)));
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    setDragging(true);
+    setRotating(false);
+    lastPointer.current = { x: event.clientX, y: event.clientY };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    const deltaX = event.clientX - lastPointer.current.x;
+    const deltaY = event.clientY - lastPointer.current.y;
+    lastPointer.current = { x: event.clientX, y: event.clientY };
+    setRotation((current) => ({
+      x: Math.max(-35, Math.min(35, current.x - deltaY * 0.2)),
+      y: current.y + deltaX * 0.25,
+    }));
+  };
+
+  const stopDragging = (event: React.PointerEvent<HTMLDivElement>) => {
+    setDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
     }
-  }, []);
+  };
 
-  if (images.length === 0) return null;
+  if (!images.length) {
+    return (
+      <div
+        className={`flex h-72 items-center justify-center rounded-xl bg-muted text-sm text-muted-foreground ${className}`}
+      >
+        {locale === "ar" ? "لا توجد صور بانورامية" : "No panoramic images available"}
+      </div>
+    );
+  }
 
   return (
     <div
       ref={containerRef}
-      className={`relative w-full overflow-hidden rounded-xl bg-black select-none ${
-        isFullscreen ? "h-screen cursor-grab active:cursor-grabbing" : "h-64 sm:h-80 cursor-grab active:cursor-grabbing"
+      tabIndex={0}
+      className={`group relative h-72 w-full overflow-hidden rounded-xl bg-black outline-none focus-visible:ring-2 focus-visible:ring-primary sm:h-96 ${
+        fullscreen ? "!h-screen !rounded-none" : ""
       } ${className}`}
-      onWheel={handleWheel}
+      aria-label={roomLabel}
     >
-      {/* Panoramic Image Display */}
-      {!imageLoaded && (
-        <Skeleton className="absolute inset-0 w-full h-full" />
-      )}
       <div
-        className="w-full h-full"
+        role="img"
+        aria-label={roomLabel}
+        className={`h-full w-full touch-none select-none bg-no-repeat ${
+          dragging ? "cursor-grabbing" : "cursor-grab"
+        }`}
         style={{
-          backgroundImage: `url(${images[currentIndex]})`,
-          backgroundSize: `${200 * zoom}% 100%`,
-          backgroundPosition: `${50 + (rotation.y % 360) * 0.1}% ${50 + rotation.x * 0.1}%`,
-          backgroundRepeat: "no-repeat",
-          transition: isDragging ? "none" : "background-position 0.05s ease-out",
-          opacity: imageLoaded ? 1 : 0,
+          backgroundImage: `url("${currentImage.replace(/"/g, "%22")}")`,
+          backgroundSize: `${Math.max(200, 200 * zoom)}% 100%`,
+          backgroundPosition: `${50 + (rotation.y % 360) * 0.25}% ${
+            50 + rotation.x * 0.35
+          }%`,
+          transition: dragging ? "none" : "background-position 80ms linear",
         }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={stopDragging}
+        onPointerCancel={stopDragging}
+        onDoubleClick={() => {
+          setRotation({ x: 0, y: 0 });
+          setZoom(1);
+        }}
+        onWheel={(event) => {
+          event.preventDefault();
+          setZoom((current) =>
+            Math.max(1, Math.min(3, current - event.deltaY * 0.0015))
+          );
+        }}
       />
 
-      {/* Gradient Overlays */}
-      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/40 to-transparent pointer-events-none" />
-      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/50" />
 
-      {/* Top Controls */}
-      <div className="absolute top-3 left-3 right-3 flex items-start justify-between z-10">
-        {/* Room label */}
-        <div className="flex items-center gap-2">
-          {roomLabels && roomLabels[currentIndex] && (
-            <span className="bg-black/50 backdrop-blur-sm text-white text-sm px-3 py-1.5 rounded-lg border border-white/10">
-              {t("virtualTour.room")} {currentIndex + 1}: {roomLabels[currentIndex]}
-            </span>
-          )}
-        </div>
-
-        {/* Control Buttons */}
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 bg-black/40 backdrop-blur-sm text-white hover:bg-black/60 hover:text-white border border-white/10"
-            onClick={() => setAutoRotating((prev) => !prev)}
-            title={autoRotating ? t("virtualTour.pauseRotation") : t("virtualTour.autoRotate")}
-          >
-            {autoRotating ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 bg-black/40 backdrop-blur-sm text-white hover:bg-black/60 hover:text-white border border-white/10"
-            onClick={() => {
-              setRotation({ x: 0, y: 0 });
-              setZoom(1);
-            }}
-            title={t("virtualTour.resetView")}
-          >
-            <RotateCcw className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 bg-black/40 backdrop-blur-sm text-white hover:bg-black/60 hover:text-white border border-white/10"
-            onClick={toggleFullscreen}
-            title={isFullscreen ? t("virtualTour.exitFullscreen") : t("virtualTour.fullscreen")}
-          >
-            {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-          </Button>
-        </div>
+      <div className="absolute start-4 top-4 rounded-full bg-black/55 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm">
+        {roomLabel}
       </div>
 
-      {/* Drag Hint */}
-      {showHint && !isDragging && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-          <div className="bg-black/50 backdrop-blur-sm text-white px-4 py-2 rounded-lg border border-white/10 animate-pulse flex items-center gap-2">
-            <Move className="w-4 h-4" />
-            <span className="text-sm">{t("virtualTour.dragToLook")}</span>
-          </div>
-        </div>
-      )}
+      <div className="absolute end-3 top-3 flex gap-1 rounded-xl bg-black/45 p-1 backdrop-blur-sm">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+          onClick={() => setZoom((current) => Math.min(3, current + 0.25))}
+          aria-label={locale === "ar" ? "تكبير" : "Zoom in"}
+        >
+          <ZoomIn className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+          onClick={() => setZoom((current) => Math.max(1, current - 0.25))}
+          aria-label={locale === "ar" ? "تصغير" : "Zoom out"}
+        >
+          <ZoomOut className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+          onClick={() => {
+            setRotation({ x: 0, y: 0 });
+            setZoom(1);
+          }}
+          aria-label={locale === "ar" ? "إعادة الضبط" : "Reset view"}
+        >
+          <RotateCcw className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+          onClick={() => setRotating((current) => !current)}
+          aria-label={
+            rotating
+              ? locale === "ar" ? "إيقاف الدوران" : "Pause rotation"
+              : locale === "ar" ? "تشغيل الدوران" : "Start rotation"
+          }
+        >
+          {rotating ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+          onClick={toggleFullscreen}
+          aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+        >
+          {fullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+        </Button>
+      </div>
 
-      {/* Zoom Indicator */}
-      {zoom > 1 && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
-          <span className="bg-black/50 backdrop-blur-sm text-white text-xs px-2 py-1 rounded border border-white/10 flex items-center gap-1">
-            <ZoomIn className="w-3 h-3" />
-            {Math.round(zoom * 100)}%
-          </span>
-        </div>
-      )}
-
-      {/* Bottom Controls */}
-      <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between z-10">
-        {/* Navigation Arrows (multiple images) */}
-        {images.length > 1 && (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 bg-black/40 backdrop-blur-sm text-white hover:bg-black/60 hover:text-white border border-white/10"
-              onClick={prevImage}
-              title={t("virtualTour.previousRoom")}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 bg-black/40 backdrop-blur-sm text-white hover:bg-black/60 hover:text-white border border-white/10"
-              onClick={nextImage}
-              title={t("virtualTour.nextRoom")}
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
-        )}
-
-        {/* Navigation Dots */}
-        {images.length > 1 && (
-          <div className="flex items-center gap-1.5 mx-auto">
-            {images.map((_, idx) => (
-              <button
-                key={idx}
-                onClick={() => goToImage(idx)}
-                className={`transition-all duration-200 rounded-full ${
-                  idx === currentIndex
-                    ? "w-6 h-2 bg-white"
-                    : "w-2 h-2 bg-white/50 hover:bg-white/70"
-                }`}
-                title={
-                  roomLabels
-                    ? roomLabels[idx]
-                    : `${t("virtualTour.room")} ${idx + 1}`
-                }
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Open Full Tour Button */}
-        {onOpenFullTour && !isFullscreen && (
+      <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2">
+        {images.length > 1 ? (
           <Button
-            variant="ghost"
-            size="sm"
-            className="bg-black/40 backdrop-blur-sm text-white hover:bg-black/60 hover:text-white border border-white/10 text-xs"
-            onClick={onOpenFullTour}
+            type="button"
+            variant="secondary"
+            size="icon"
+            className="h-9 w-9 rounded-full bg-black/55 text-white hover:bg-black/75"
+            onClick={() => changeIndex(currentIndex - 1)}
+            aria-label={t("common.previous")}
           >
-            <Maximize className="w-3.5 h-3.5 me-1" />
-            {t("virtualTour.openFullTour")}
+            <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
           </Button>
-        )}
+        ) : null}
+        <div className="flex items-center gap-2 rounded-full bg-black/55 px-3 py-2 text-xs text-white backdrop-blur-sm">
+          <Move className="h-3.5 w-3.5" />
+          {currentIndex + 1} / {images.length}
+        </div>
+        {images.length > 1 ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            className="h-9 w-9 rounded-full bg-black/55 text-white hover:bg-black/75"
+            onClick={() => changeIndex(currentIndex + 1)}
+            aria-label={t("common.next")}
+          >
+            <ChevronRight className="h-4 w-4 rtl:rotate-180" />
+          </Button>
+        ) : null}
       </div>
     </div>
   );
