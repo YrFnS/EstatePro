@@ -1,200 +1,218 @@
 "use client";
 
-import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from "react";
+import {
+  BarChart3,
+  Brain,
+  Building2,
+  Calendar,
+  Calculator,
+  ChevronDown,
+  DollarSign,
+  Globe,
+  Heart,
+  Home,
+  Key,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  MessageCircle,
+  Moon,
+  Route,
+  Scale,
+  Settings,
+  Shield,
+  Sun,
+  UserCircle,
+  Users,
+} from "lucide-react";
+import { useTheme } from "next-themes";
+import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
+import { useCompare } from "@/lib/compare";
+import { useFavorites } from "@/lib/favorites";
 import { useI18n } from "@/lib/i18n/provider";
 import { useRouter, type View } from "@/lib/router";
-import { useTheme } from "next-themes";
-import { useFavorites } from "@/lib/favorites";
-import { useCompare } from "@/lib/compare";
-import { useAuth } from "@/lib/auth-context";
-import { Home, Globe, Sun, Moon, Menu, Heart, Scale, BookmarkPlus, Brain, DollarSign, MapPin, ChevronDown, Calculator, Compass, UserCircle, Calendar, BellRing, BarChart3, Settings, Shield, LogOut, LayoutDashboard, Route } from "lucide-react";
-import { NotificationBell } from "@/components/real-estate/notification-bell";
+import { cn } from "@/lib/utils";
 import { AuthDialog } from "@/components/real-estate/auth-dialog";
-import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/real-estate/notification-bell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-  SheetClose,
-} from "@/components/ui/sheet";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
-interface NavItem {
+interface NavigationItem {
   label: string;
   view: View;
-  icon?: React.ComponentType<{ className?: string }>;
+  icon: ComponentType<{ className?: string }>;
+  params?: Record<string, string>;
+}
+
+function initials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 }
 
 export function Navbar() {
   const { t, locale, setLocale, dir } = useI18n();
-  const { view, navigate } = useRouter();
+  const { view, params, navigate } = useRouter();
   const { theme, setTheme } = useTheme();
   const { favoritesCount } = useFavorites();
   const { compareCount } = useCompare();
   const { user, isAuthenticated, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
-  const emptySubscribe = useCallback(() => () => {}, []);
-  const mounted = useSyncExternalStore(
-    emptySubscribe,
-    () => true,
-    () => false
-  );
+  const [scrolled, setScrolled] = useState(false);
+  const subscribe = useCallback(() => () => {}, []);
+  const mounted = useSyncExternalStore(subscribe, () => true, () => false);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 10);
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const navItems: NavItem[] = [
-    { label: t("common.home"), view: "home" },
-    { label: t("common.properties"), view: "properties" },
-    { label: t("common.agents"), view: "agents" },
-    { label: t("common.about"), view: "about" },
-    { label: t("common.contact"), view: "contact" },
-  ];
+  const mainNavigation = useMemo<NavigationItem[]>(
+    () => [
+      { label: t("common.home"), view: "home", icon: Home },
+      {
+        label: t("common.forSale"),
+        view: "properties",
+        icon: Building2,
+        params: { status: "sale" },
+      },
+      {
+        label: t("common.forRent"),
+        view: "properties",
+        icon: Key,
+        params: { status: "rent" },
+      },
+      { label: t("common.agents"), view: "agents", icon: Users },
+      {
+        label: t("marketInsights.title"),
+        view: "market-insights",
+        icon: BarChart3,
+      },
+    ],
+    [t]
+  );
 
-  const toolItems: NavItem[] = [
-    { label: t("common.calculator"), view: "calculator", icon: Calculator },
-    { label: t("commute.title"), view: "commute" as View, icon: Route },
-    { label: t("aiRecommend.title"), view: "ai-recommend", icon: Brain },
-    { label: t("valuation.title"), view: "valuation", icon: DollarSign },
-    { label: t("neighborhoodGuide.heroTitle"), view: "neighborhood-guide", icon: Compass },
-    { label: t("alerts.title"), view: "property-alerts", icon: BellRing },
-    { label: t("marketInsights.title"), view: "market-insights", icon: BarChart3 },
-    { label: t("admin.title"), view: "admin" as View, icon: Shield },
-  ];
+  const tools = useMemo<NavigationItem[]>(
+    () => [
+      { label: t("common.calculator"), view: "calculator", icon: Calculator },
+      { label: t("commute.title"), view: "commute", icon: Route },
+      { label: t("aiRecommend.title"), view: "ai-recommend", icon: Brain },
+      { label: t("valuation.title"), view: "valuation", icon: DollarSign },
+    ],
+    [t]
+  );
 
-  const isToolsActive = toolItems.some(item => item.view === view);
-
-  const toggleLocale = () => {
-    setLocale(locale === "en" ? "ar" : "en");
+  const isActive = (item: NavigationItem) => {
+    if (view !== item.view) return false;
+    if (!item.params) return true;
+    return Object.entries(item.params).every(([key, value]) => params[key] === value);
   };
 
-  const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
-  };
-
-  const handleNavClick = (navView: View) => {
-    navigate(navView);
+  const go = (item: NavigationItem) => {
+    navigate(item.view, item.params);
     setMobileOpen(false);
   };
 
   const handleLogout = async () => {
     await logout();
+    setMobileOpen(false);
     toast.success(t("auth.signOutSuccess"));
   };
 
-  const getUserInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
+  const accountItems: NavigationItem[] = [
+    { label: t("dashboard.title"), view: "dashboard", icon: LayoutDashboard },
+    { label: t("messaging.title"), view: "messaging", icon: MessageCircle },
+    { label: t("tour.title"), view: "my-tours", icon: Calendar },
+    { label: t("settings.title"), view: "settings", icon: Settings },
+  ];
+
+  if (user?.role === "admin") {
+    accountItems.push({ label: t("admin.title"), view: "admin", icon: Shield });
+  }
 
   return (
     <>
-      <header className={cn(
-        "sticky top-0 z-50 w-full transition-all duration-300",
-        scrolled
-          ? "bg-background/80 backdrop-blur-xl border-b border-border/80 shadow-sm"
-          : "bg-background border-b border-border"
-      )}>
-        <div
-          className={cn(
-            "mx-auto max-w-7xl h-16",
-            "flex items-center justify-between px-4 sm:px-6",
-            "transition-all duration-300"
-          )}
-        >
-          {/* Logo */}
+      <header
+        className={cn(
+          "sticky top-0 z-50 w-full border-b transition-colors",
+          scrolled
+            ? "border-border/70 bg-background/90 shadow-sm backdrop-blur-xl"
+            : "border-border bg-background"
+        )}
+      >
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <button
-            onClick={() => handleNavClick("home")}
-            className="flex items-center gap-2 hover:opacity-80 transition-opacity shrink-0"
+            type="button"
+            onClick={() => navigate("home")}
+            className="flex shrink-0 items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={t("common.home")}
           >
-            <Home className="w-5 h-5 text-[var(--gold)]" />
-            <span className="text-lg font-semibold tracking-tight text-foreground">
-              {t("common.appName")}
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+              <Home className="h-4 w-4" />
             </span>
+            <span className="text-lg font-bold tracking-tight">{t("common.appName")}</span>
           </button>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center gap-6">
-            {navItems.map((item) => (
+          <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary navigation">
+            {mainNavigation.map((item) => (
               <button
-                key={item.view}
-                onClick={() => handleNavClick(item.view)}
+                type="button"
+                key={`${item.view}-${item.params?.status || ""}`}
+                onClick={() => go(item)}
                 className={cn(
-                  "relative py-1 text-sm font-medium transition-colors duration-200",
-                  view === item.view
-                    ? "text-foreground"
-                    : "text-foreground/60 hover:text-foreground"
+                  "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  isActive(item)
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
                 {item.label}
-                {/* Animated underline on active */}
-                <span
-                  className={cn(
-                    "absolute bottom-0 start-0 end-0 h-0.5 bg-[var(--gold)] rounded-full transition-all duration-300 origin-center",
-                    view === item.view
-                      ? "scale-x-100 opacity-100"
-                      : "scale-x-0 opacity-0"
-                  )}
-                />
               </button>
             ))}
 
-            {/* Tools Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button
+                <Button
+                  variant="ghost"
                   className={cn(
-                    "relative py-1 text-sm font-medium transition-colors duration-200 flex items-center gap-1",
-                    isToolsActive
-                      ? "text-foreground"
-                      : "text-foreground/60 hover:text-foreground"
+                    "gap-1 px-3 text-muted-foreground",
+                    tools.some(isActive) && "bg-primary/10 text-primary"
                   )}
                 >
                   {t("common.tools")}
-                  <ChevronDown className="w-3.5 h-3.5 transition-transform duration-200" />
-                  <span
-                    className={cn(
-                      "absolute bottom-0 start-0 end-0 h-0.5 bg-[var(--gold)] rounded-full transition-all duration-300 origin-center",
-                      isToolsActive
-                        ? "scale-x-100 opacity-100"
-                        : "scale-x-0 opacity-0"
-                    )}
-                  />
-                </button>
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
-                {toolItems.map((item) => (
-                  <DropdownMenuItem
-                    key={item.view}
-                    onClick={() => handleNavClick(item.view)}
-                    className={cn(
-                      "cursor-pointer gap-2",
-                      view === item.view && "text-[var(--gold)]"
-                    )}
-                  >
-                    {item.icon && <item.icon className="w-4 h-4" />}
+              <DropdownMenuContent align="start" className="w-56">
+                {tools.map((item) => (
+                  <DropdownMenuItem key={item.view} onClick={() => go(item)} className="gap-2">
+                    <item.icon className="h-4 w-4" />
                     {item.label}
                   </DropdownMenuItem>
                 ))}
@@ -202,382 +220,244 @@ export function Navbar() {
             </DropdownMenu>
           </nav>
 
-          {/* Desktop Actions */}
-          <div className="hidden lg:flex items-center gap-1">
-            {/* Favorites */}
+          <div className="hidden items-center gap-1 lg:flex">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => handleNavClick("favorites")}
-              className="relative h-9 w-9"
-              title={t("common.favorites")}
+              onClick={() => navigate("favorites")}
+              className="relative"
+              aria-label={t("common.favorites")}
             >
-              <Heart className={cn("h-4 w-4", view === "favorites" && "fill-current text-red-500")} />
-              {favoritesCount > 0 && (
-                <span className="absolute -top-0.5 -end-0.5 flex items-center justify-center min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[10px] font-bold px-0.5">
+              <Heart className={cn("h-4 w-4", view === "favorites" && "fill-red-500 text-red-500")} />
+              {favoritesCount > 0 ? (
+                <Badge className="absolute -end-1 -top-1 h-4 min-w-4 justify-center rounded-full px-1 text-[9px]">
                   {favoritesCount > 9 ? "9+" : favoritesCount}
-                </span>
-              )}
+                </Badge>
+              ) : null}
             </Button>
-
-            {/* Compare */}
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => handleNavClick("compare")}
-              className="relative h-9 w-9"
-              title={t("common.compare")}
+              onClick={() => navigate("compare")}
+              className="relative"
+              aria-label={t("common.compare")}
             >
-              <Scale className="h-4 w-4" />
-              {compareCount > 0 && (
-                <span className="absolute -top-0.5 -end-0.5 flex items-center justify-center min-w-[16px] h-4 rounded-full bg-[var(--gold)] text-[var(--gold-foreground)] text-[10px] font-bold px-0.5">
+              <Scale className={cn("h-4 w-4", view === "compare" && "text-primary")} />
+              {compareCount > 0 ? (
+                <Badge className="absolute -end-1 -top-1 h-4 min-w-4 justify-center rounded-full px-1 text-[9px]">
                   {compareCount}
-                </span>
-              )}
+                </Badge>
+              ) : null}
             </Button>
-
-            {/* Notifications */}
             <NotificationBell />
 
-            {/* Divider */}
-            <div className="w-px h-5 bg-border mx-1" />
+            <div className="mx-1 h-5 w-px bg-border" />
 
-            {/* Language Toggle */}
             <Button
               variant="ghost"
               size="sm"
-              onClick={toggleLocale}
-              className="gap-1.5 text-xs font-medium h-8 px-2"
-              title={locale === "en" ? t("common.arabic") : t("common.english")}
+              onClick={() => setLocale(locale === "en" ? "ar" : "en")}
+              className="gap-1.5"
+              aria-label={locale === "en" ? t("common.arabic") : t("common.english")}
             >
-              <Globe className="h-3.5 w-3.5" />
+              <Globe className="h-4 w-4" />
               {locale === "en" ? "AR" : "EN"}
             </Button>
-
-            {/* Theme Toggle */}
             <Button
               variant="ghost"
               size="icon"
-              onClick={toggleTheme}
-              className="h-9 w-9"
-              title={mounted ? (theme === "dark" ? t("common.lightMode") : t("common.darkMode")) : ""}
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              aria-label={mounted && theme === "dark" ? t("common.lightMode") : t("common.darkMode")}
             >
-              <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-              <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-              <span className="sr-only">
-                {mounted ? (theme === "dark" ? t("common.lightMode") : t("common.darkMode")) : ""}
-              </span>
+              <Sun className="h-4 w-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
+              <Moon className="absolute h-4 w-4 scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
             </Button>
 
-            {/* Auth Button */}
             {isAuthenticated && user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="gap-2 h-9 px-2">
-                    <Avatar className="h-7 w-7">
-                      {user.avatar && <AvatarImage src={user.avatar} alt={user.name} />}
-                      <AvatarFallback className="text-xs bg-[var(--gold)] text-[var(--gold-foreground)]">
-                        {getUserInitials(user.name)}
-                      </AvatarFallback>
+                  <Button variant="ghost" className="ms-1 gap-2 px-2">
+                    <Avatar className="h-8 w-8">
+                      {user.avatar ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
+                      <AvatarFallback>{initials(user.name)}</AvatarFallback>
                     </Avatar>
-                    <span className="text-sm font-medium max-w-[80px] truncate hidden xl:inline">
-                      {user.name}
-                    </span>
+                    <span className="hidden max-w-28 truncate text-sm xl:block">{user.name}</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <div className="px-2 py-1.5">
-                    <p className="text-sm font-medium">{user.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                  </div>
+                <DropdownMenuContent align="end" className="w-60">
+                  <DropdownMenuLabel>
+                    <p className="truncate">{user.name}</p>
+                    <p className="truncate text-xs font-normal text-muted-foreground">{user.email}</p>
+                  </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => handleNavClick("dashboard")}
-                    className="cursor-pointer gap-2"
-                  >
-                    <LayoutDashboard className="w-4 h-4" />
-                    {t("dashboard.title")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => handleNavClick("settings")}
-                    className="cursor-pointer gap-2"
-                  >
-                    <Settings className="w-4 h-4" />
-                    {t("settings.title")}
-                  </DropdownMenuItem>
+                  {accountItems.map((item) => (
+                    <DropdownMenuItem key={item.view} onClick={() => go(item)} className="gap-2">
+                      <item.icon className="h-4 w-4" />
+                      {item.label}
+                    </DropdownMenuItem>
+                  ))}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={handleLogout}
-                    className="cursor-pointer gap-2 text-destructive focus:text-destructive"
-                  >
-                    <LogOut className="w-4 h-4" />
+                  <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive">
+                    <LogOut className="h-4 w-4" />
                     {t("auth.signOut")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setAuthDialogOpen(true)}
-                className="gap-1.5 text-sm font-medium h-9 px-3"
-              >
+              <Button onClick={() => setAuthDialogOpen(true)} className="ms-1 gap-2">
                 <UserCircle className="h-4 w-4" />
                 {t("auth.signIn")}
               </Button>
             )}
           </div>
 
-          {/* Mobile Actions */}
-          <div className="flex lg:hidden items-center gap-0.5">
-            {/* Favorites */}
+          <div className="flex items-center gap-0.5 lg:hidden">
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 relative"
-              onClick={() => handleNavClick("favorites")}
+              onClick={() => navigate("favorites")}
+              className="relative"
+              aria-label={t("common.favorites")}
             >
-              <Heart className={cn("h-4 w-4", view === "favorites" && "fill-current text-red-500")} />
-              {favoritesCount > 0 && (
-                <span className="absolute -top-0.5 -end-0.5 flex items-center justify-center min-w-[14px] h-3.5 rounded-full bg-red-500 text-white text-[9px] font-bold px-0.5">
+              <Heart className={cn("h-4 w-4", view === "favorites" && "fill-red-500 text-red-500")} />
+              {favoritesCount > 0 ? (
+                <Badge className="absolute -end-0.5 -top-0.5 h-4 min-w-4 justify-center rounded-full px-1 text-[9px]">
                   {favoritesCount > 9 ? "9+" : favoritesCount}
-                </span>
-              )}
+                </Badge>
+              ) : null}
             </Button>
-
-            {/* Compare */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 relative"
-              onClick={() => handleNavClick("compare")}
-            >
-              <Scale className="h-4 w-4" />
-              {compareCount > 0 && (
-                <span className="absolute -top-0.5 -end-0.5 flex items-center justify-center min-w-[14px] h-3.5 rounded-full bg-[var(--gold)] text-[var(--gold-foreground)] text-[9px] font-bold px-0.5">
-                  {compareCount}
-                </span>
-              )}
-            </Button>
-
-            {/* Notifications */}
             <NotificationBell />
-
-            {/* Mobile Menu */}
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9">
-                  <Menu className="w-5 h-5" />
-                  <span className="sr-only">Menu</span>
+                <Button variant="ghost" size="icon" aria-label="Menu">
+                  <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side={dir === "rtl" ? "right" : "left"} className="w-72">
+              <SheetContent side={dir === "rtl" ? "right" : "left"} className="w-[88vw] max-w-sm overflow-y-auto">
                 <SheetHeader>
                   <SheetTitle className="flex items-center gap-2">
-                    <Home className="w-4 h-4 text-[var(--gold)]" />
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                      <Home className="h-4 w-4" />
+                    </span>
                     {t("common.appName")}
                   </SheetTitle>
                 </SheetHeader>
-                <nav className="flex flex-col gap-0.5 mt-4">
-                  {navItems.map((item) => (
-                    <SheetClose asChild key={item.view}>
-                      <button
-                        onClick={() => handleNavClick(item.view)}
-                        className={cn(
-                          "w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-colors text-start",
-                          view === item.view
-                            ? "text-[var(--gold)] bg-[var(--gold)]/5"
-                            : "text-foreground/60 hover:text-foreground hover:bg-accent/50"
-                        )}
-                      >
-                        {item.label}
-                      </button>
-                    </SheetClose>
-                  ))}
 
-                  {/* Tools section */}
-                  <div className="pt-3 mt-3 border-t">
-                    <div className="px-4 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-                      {t("common.tools")}
-                    </div>
-                    {toolItems.map((item) => (
-                      <SheetClose asChild key={item.view}>
+                <div className="mt-6 space-y-6">
+                  <nav className="space-y-1" aria-label="Mobile navigation">
+                    {mainNavigation.map((item) => (
+                      <SheetClose asChild key={`${item.view}-${item.params?.status || ""}`}>
                         <button
-                          onClick={() => handleNavClick(item.view)}
+                          type="button"
+                          onClick={() => go(item)}
                           className={cn(
-                            "w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-colors text-start flex items-center gap-3",
-                            view === item.view
-                              ? "text-[var(--gold)] bg-[var(--gold)]/5"
-                              : "text-foreground/60 hover:text-foreground hover:bg-accent/50"
+                            "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start text-sm font-medium",
+                            isActive(item) ? "bg-primary/10 text-primary" : "hover:bg-muted"
                           )}
                         >
-                          {item.icon && <item.icon className="w-4 h-4" />}
+                          <item.icon className="h-4 w-4" />
                           {item.label}
                         </button>
                       </SheetClose>
                     ))}
-                  </div>
+                  </nav>
 
-                  {/* Account section - items moved from navbar action bar */}
-                  <div className="pt-3 mt-3 border-t">
-                    <div className="px-4 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-                      {t("dashboard.title")}
-                    </div>
-                    {/* Dashboard */}
-                    <SheetClose asChild>
-                      <button
-                        onClick={() => handleNavClick("dashboard")}
-                        className={cn(
-                          "w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-colors text-start flex items-center gap-3",
-                          view === "dashboard"
-                            ? "text-[var(--gold)] bg-[var(--gold)]/5"
-                            : "text-foreground/60 hover:text-foreground hover:bg-accent/50"
-                        )}
-                      >
-                        <UserCircle className="w-4 h-4" />
-                        {t("dashboard.title")}
-                      </button>
-                    </SheetClose>
-                    {/* Saved Searches */}
-                    <SheetClose asChild>
-                      <button
-                        onClick={() => handleNavClick("saved-searches")}
-                        className={cn(
-                          "w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-colors text-start flex items-center gap-3",
-                          view === "saved-searches"
-                            ? "text-[var(--gold)] bg-[var(--gold)]/5"
-                            : "text-foreground/60 hover:text-foreground hover:bg-accent/50"
-                        )}
-                      >
-                        <BookmarkPlus className="w-4 h-4" />
-                        {t("savedSearch.title")}
-                      </button>
-                    </SheetClose>
-                    {/* My Tours */}
-                    <SheetClose asChild>
-                      <button
-                        onClick={() => handleNavClick("my-tours")}
-                        className={cn(
-                          "w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-colors text-start flex items-center gap-3",
-                          view === "my-tours"
-                            ? "text-[var(--gold)] bg-[var(--gold)]/5"
-                            : "text-foreground/60 hover:text-foreground hover:bg-accent/50"
-                        )}
-                      >
-                        <Calendar className="w-4 h-4" />
-                        {t("tour.title")}
-                      </button>
-                    </SheetClose>
-                    {/* Market Insights */}
-                    <SheetClose asChild>
-                      <button
-                        onClick={() => handleNavClick("market-insights")}
-                        className={cn(
-                          "w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-colors text-start flex items-center gap-3",
-                          view === "market-insights"
-                            ? "text-[var(--gold)] bg-[var(--gold)]/5"
-                            : "text-foreground/60 hover:text-foreground hover:bg-accent/50"
-                        )}
-                      >
-                        <BarChart3 className="w-4 h-4" />
-                        {t("marketInsights.title")}
-                      </button>
-                    </SheetClose>
-                    {/* Settings */}
-                    <SheetClose asChild>
-                      <button
-                        onClick={() => handleNavClick("settings")}
-                        className={cn(
-                          "w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-colors text-start flex items-center gap-3",
-                          view === "settings"
-                            ? "text-[var(--gold)] bg-[var(--gold)]/5"
-                            : "text-foreground/60 hover:text-foreground hover:bg-accent/50"
-                        )}
-                      >
-                        <Settings className="w-4 h-4" />
-                        {t("settings.title")}
-                      </button>
-                    </SheetClose>
-
-                    {/* Sign In / Sign Out */}
-                    {isAuthenticated && user ? (
-                      <>
-                        <div className="px-4 py-2.5 flex items-center gap-3">
-                          <Avatar className="h-6 w-6">
-                            {user.avatar && <AvatarImage src={user.avatar} alt={user.name} />}
-                            <AvatarFallback className="text-[10px] bg-[var(--gold)] text-[var(--gold-foreground)]">
-                              {getUserInitials(user.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-sm font-medium truncate">{user.name}</span>
-                        </div>
-                        <SheetClose asChild>
+                  <div className="border-t pt-5">
+                    <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {t("common.tools")}
+                    </p>
+                    <div className="space-y-1">
+                      {tools.map((item) => (
+                        <SheetClose asChild key={item.view}>
                           <button
-                            onClick={() => {
-                              handleLogout();
-                              setMobileOpen(false);
-                            }}
-                            className="w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-colors text-start flex items-center gap-3 text-destructive hover:bg-destructive/10"
+                            type="button"
+                            onClick={() => go(item)}
+                            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start text-sm hover:bg-muted"
                           >
-                            <LogOut className="w-4 h-4" />
-                            {t("auth.signOut")}
+                            <item.icon className="h-4 w-4" />
+                            {item.label}
                           </button>
                         </SheetClose>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-5">
+                    <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {isAuthenticated ? t("dashboard.title") : t("auth.signIn")}
+                    </p>
+                    {isAuthenticated && user ? (
+                      <>
+                        <div className="mb-2 flex items-center gap-3 rounded-xl bg-muted/50 p-3">
+                          <Avatar className="h-9 w-9">
+                            {user.avatar ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
+                            <AvatarFallback>{initials(user.name)}</AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold">{user.name}</p>
+                            <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                          </div>
+                        </div>
+                        {accountItems.map((item) => (
+                          <SheetClose asChild key={item.view}>
+                            <button
+                              type="button"
+                              onClick={() => go(item)}
+                              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start text-sm hover:bg-muted"
+                            >
+                              <item.icon className="h-4 w-4" />
+                              {item.label}
+                            </button>
+                          </SheetClose>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={handleLogout}
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start text-sm text-destructive hover:bg-destructive/10"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          {t("auth.signOut")}
+                        </button>
                       </>
                     ) : (
-                      <SheetClose asChild>
-                        <button
-                          onClick={() => {
-                            setMobileOpen(false);
-                            setAuthDialogOpen(true);
-                          }}
-                          className="w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-colors text-start flex items-center gap-3 text-[var(--gold)] hover:bg-[var(--gold)]/5"
-                        >
-                          <UserCircle className="w-4 h-4" />
-                          {t("auth.signIn")}
-                        </button>
-                      </SheetClose>
+                      <Button
+                        className="w-full gap-2"
+                        onClick={() => {
+                          setMobileOpen(false);
+                          setAuthDialogOpen(true);
+                        }}
+                      >
+                        <UserCircle className="h-4 w-4" />
+                        {t("auth.signIn")}
+                      </Button>
                     )}
                   </div>
 
-                  {/* Mobile toggles */}
-                  <div className="pt-3 mt-3 border-t flex items-center gap-2 px-4">
+                  <div className="grid grid-cols-2 gap-2 border-t pt-5">
                     <Button
                       variant="outline"
-                      size="sm"
-                      onClick={toggleLocale}
-                      className="gap-1.5 text-xs font-medium h-8 flex-1"
+                      onClick={() => setLocale(locale === "en" ? "ar" : "en")}
+                      className="gap-2"
                     >
-                      <Globe className="h-3.5 w-3.5" />
+                      <Globe className="h-4 w-4" />
                       {locale === "en" ? "العربية" : "English"}
                     </Button>
                     <Button
                       variant="outline"
-                      size="sm"
-                      onClick={toggleTheme}
-                      className="gap-1.5 text-xs font-medium h-8 flex-1"
+                      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                      className="gap-2"
                     >
-                      {mounted && theme === "dark" ? (
-                        <>
-                          <Sun className="h-3.5 w-3.5" />
-                          {t("common.lightMode")}
-                        </>
-                      ) : (
-                        <>
-                          <Moon className="h-3.5 w-3.5" />
-                          {t("common.darkMode")}
-                        </>
-                      )}
+                      {mounted && theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                      {mounted && theme === "dark" ? t("common.lightMode") : t("common.darkMode")}
                     </Button>
                   </div>
-                </nav>
+                </div>
               </SheetContent>
             </Sheet>
           </div>
         </div>
       </header>
 
-      {/* Auth Dialog */}
       <AuthDialog open={authDialogOpen} onOpenChange={setAuthDialogOpen} />
     </>
   );
