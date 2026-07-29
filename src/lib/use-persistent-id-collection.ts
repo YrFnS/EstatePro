@@ -310,7 +310,7 @@ export function usePersistentIdCollection({
     },
     [
       accountStoragePrefix,
-      guestSorageKey,
+      guestStorageKey,
       maxItems,
       queueAccountSync,
       user?.id,
