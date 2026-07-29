@@ -3,16 +3,26 @@ import { NextRequest, NextResponse } from "next/server";
 const ADMIN_SESSION_COOKIE = "admin_guard";
 const ADMIN_NONCE_COOKIE = "admin_token";
 
-function base64UrlToBytes(value: string): Uint8Array {
+function base64UrlToBytes(value: string): Uint8Array<ArrayBuffer> {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
   const binary = atob(padded);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  const bytes = new Uint8Array(new ArrayBuffer(binary.length));
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function utf8Bytes(value: string): Uint8Array<ArrayBuffer> {
+  const encoded = new TextEncoder().encode(value);
+  const bytes = new Uint8Array(new ArrayBuffer(encoded.byteLength));
+  bytes.set(encoded);
+  return bytes;
 }
 
 function decodePayload(value: string): unknown {
-  const bytes = base64UrlToBytes(value);
-  return JSON.parse(new TextDecoder().decode(bytes));
+  return JSON.parse(new TextDecoder().decode(base64UrlToBytes(value)));
 }
 
 async function verifyAdminRequest(request: NextRequest): Promise<boolean> {
@@ -28,7 +38,7 @@ async function verifyAdminRequest(request: NextRequest): Promise<boolean> {
   try {
     const key = await crypto.subtle.importKey(
       "raw",
-      new TextEncoder().encode(secret),
+      utf8Bytes(secret),
       { name: "HMAC", hash: "SHA-256" },
       false,
       ["verify"]
@@ -38,7 +48,7 @@ async function verifyAdminRequest(request: NextRequest): Promise<boolean> {
       "HMAC",
       key,
       base64UrlToBytes(signature),
-      new TextEncoder().encode(encodedPayload)
+      utf8Bytes(encodedPayload)
     );
     if (!validSignature) return false;
 
