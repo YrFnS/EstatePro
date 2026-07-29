@@ -1,937 +1,555 @@
 "use client";
 
-import { useI18n } from "@/lib/i18n/provider";
-import { useRouter } from "@/lib/router";
-import { useFavorites } from "@/lib/favorites";
-import { useCompare } from "@/lib/compare";
-import { useRecentlyViewed } from "@/lib/recently-viewed";
-import { useState, useEffect, useCallback, useRef } from "react";
-import { motion, useInView } from "framer-motion";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
-  Bed,
   Bath,
-  Maximize,
+  Bed,
+  Building2,
+  Calculator,
   Calendar,
   Car,
-  MapPin,
+  CheckCircle2,
   Heart,
-  Share2,
-  CheckCircle,
-  Send,
-  Star,
-  Eye,
-  Play,
-  Phone,
-  Calculator,
-  Copy,
-  ExternalLink,
-  Home,
-  ChevronRight as ChevronRightIcon,
-  Footprints,
-  TrendingUp,
-  Clock,
+  Loader2,
+  MapPin,
+  Maximize,
   MessageCircle,
-  Route,
-  Train,
-  Bike,
+  Phone,
+  PlayCircle,
+  Send,
+  Share2,
+  Star,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
+import { useCompare } from "@/lib/compare";
+import { useFavorites } from "@/lib/favorites";
+import { useI18n } from "@/lib/i18n/provider";
+import { useRecentlyViewed } from "@/lib/recently-viewed";
+import { useRouter } from "@/lib/router";
+import { cn } from "@/lib/utils";
 import { PropertyCard } from "@/components/real-estate/property-card";
 import { PropertyGallery } from "@/components/real-estate/property-gallery";
+import { PropertyMap } from "@/components/real-estate/property-map";
 import { PropertyReviews } from "@/components/real-estate/property-reviews";
 import { ScheduleTourDialog } from "@/components/real-estate/schedule-tour-dialog";
 import { SharePropertyDialog } from "@/components/real-estate/share-property-dialog";
-import { ShareButtons } from "@/components/real-estate/share-buttons";
-import { PropertyMap } from "@/components/real-estate/property-map";
-import { PanoramicViewer } from "@/components/real-estate/panoramic-viewer";
-import { toast } from "sonner";
-
 import type { Property } from "@/components/real-estate/types/property";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 
-// Mortgage calculation helper
-function calculateMonthlyPayment(price: number): number {
-  const loanAmount = price * 0.8;
-  const monthlyRate = 0.065 / 12;
-  const numPayments = 30 * 12;
-  if (monthlyRate === 0) return loanAmount / numPayments;
+function monthlyPayment(price: number): number {
+  const principal = price * 0.8;
+  const rate = 0.065 / 12;
+  const payments = 30 * 12;
+  if (principal <= 0) return 0;
   return (
-    (loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, numPayments))) /
-    (Math.pow(1 + monthlyRate, numPayments) - 1)
+    (principal * rate * Math.pow(1 + rate, payments)) /
+    (Math.pow(1 + rate, payments) - 1)
   );
 }
 
-// Scroll-reveal wrapper — Framer Motion ONLY for scroll-triggered reveals, NOT hover
-function RevealSection({ children, className, delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-60px" });
+function initials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function DetailStat({
+  icon: Icon,
+  value,
+  label,
+}: {
+  icon: typeof Bed;
+  value: string;
+  label: string;
+}) {
   return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 24 }}
-      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
-      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
-      className={className}
-    >
-      {children}
-    </motion.div>
+    <div className="flex items-center gap-3 rounded-xl border bg-background p-4">
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Icon className="h-5 w-5" />
+      </div>
+      <div>
+        <p className="font-semibold">{value}</p>
+        <p className="text-xs text-muted-foreground">{label}</p>
+      </div>
+    </div>
   );
 }
 
 export function PropertyDetailPage() {
   const { t, locale } = useI18n();
   const { params, back, navigate } = useRouter();
+  const { user } = useAuth();
   const { isFavorite, toggleFavorite } = useFavorites();
-  const { isInCompare, toggleCompare, compareCount } = useCompare();
+  const { isInCompare, toggleCompare } = useCompare();
   const { addViewed } = useRecentlyViewed();
   const [property, setProperty] = useState<Property | null>(null);
-  const [similarProperties, setSimilarProperties] = useState<any[]>([]);
+  const [similar, setSimilar] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const [inquiryForm, setInquiryForm] = useState({ name: "", email: "", phone: "", message: "" });
+  const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [inquiry, setInquiry] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    message: "",
+  });
 
-  const fetchProperty = useCallback(async () => {
-    if (!params.id) return;
+  const copy = useCallback(
+    (key: string, fallback: string) => {
+      const translated = t(key);
+      return translated === key ? fallback : translated;
+    },
+    [t]
+  );
+
+  useEffect(() => {
+    if (!user) return;
+    setInquiry((current) => ({
+      ...current,
+      name: current.name || user.name,
+      email: current.email || user.email,
+    }));
+  }, [user]);
+
+  const load = useCallback(async () => {
+    if (!params.id) {
+      setError(copy("property.notFound", "Property not found"));
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
+    setError("");
     try {
-      const res = await fetch(`/api/properties/${params.id}`);
-      const data = await res.json();
-      
-      // Check if API returned an error
-      if (!res.ok || data.error) {
-        setProperty(null);
-        return;
+      const response = await fetch(`/api/properties/${encodeURIComponent(params.id)}`, {
+        cache: "no-store",
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.error) {
+        throw new Error(payload.error || "Property not found");
       }
-      
-      setProperty(data);
 
-      // Add to recently viewed
-      addViewed(data.id);
+      const loaded = payload as Property;
+      setProperty(loaded);
+      addViewed(loaded.id);
 
-      // Fetch similar properties
-      const simRes = await fetch(`/api/properties?type=${data.type}&limit=3`);
-      const simData = await simRes.json();
-      setSimilarProperties((simData.properties || []).filter((p: any) => p.id !== data.id));
-    } catch {
+      const similarResponse = await fetch(
+        `/api/properties?type=${encodeURIComponent(loaded.type)}&limit=4`,
+        { cache: "no-store" }
+      );
+      if (similarResponse.ok) {
+        const similarPayload = await similarResponse.json();
+        setSimilar(
+          (similarPayload.properties || [])
+            .filter((item: Property) => item.id !== loaded.id)
+            .slice(0, 3)
+        );
+      }
+    } catch (caught) {
+      console.error(caught);
       setProperty(null);
+      setSimilar([]);
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : copy("property.notFound", "Property not found")
+      );
     } finally {
       setLoading(false);
     }
-  }, [params.id, addViewed]);
+  }, [addViewed, copy, params.id]);
 
   useEffect(() => {
-    fetchProperty();
-  }, [fetchProperty]);
+    load();
+  }, [load]);
 
+  const submitInquiry = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!property || submitting) return;
 
-
-  const handleInquiry = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!property) return;
     setSubmitting(true);
     try {
-      await fetch("/api/inquiries", {
+      const response = await fetch("/api/inquiries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...inquiryForm,
-          propertyId: property.id,
-        }),
+        body: JSON.stringify({ ...inquiry, propertyId: property.id }),
       });
-      toast.success(t("contact.successMessage"));
-      setInquiryForm({ name: "", email: "", phone: "", message: "" });
-    } catch {
-      toast.error("Failed to send inquiry");
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to send inquiry");
+      }
+      toast.success(copy("contact.successMessage", "Inquiry sent successfully"));
+      setInquiry((current) => ({ ...current, phone: "", message: "" }));
+    } catch (caught) {
+      toast.error(
+        caught instanceof Error
+          ? caught.message
+          : copy("contact.failed", "Failed to send inquiry")
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleShare = useCallback(() => {
-    if (typeof window !== "undefined") {
-      navigator.clipboard.writeText(window.location.href).then(() => {
-        toast.success(t("propertyDetail.linkCopied"));
-      });
-    }
-  }, [t]);
-
-  const handleEmailShare = useCallback(() => {
-    if (typeof window !== "undefined" && property) {
-      const title = locale === "ar" ? property.titleAr : property.titleEn;
-      const subject = encodeURIComponent(`Check out: ${title}`);
-      const body = encodeURIComponent(`Take a look at this property: ${window.location.href}`);
-      window.open(`mailto:?subject=${subject}&body=${body}`);
-    }
-  }, [locale, property]);
-
-  const handleFavoriteToggle = useCallback(() => {
-    if (!property) return;
-    const nowFav = toggleFavorite(property.id);
-    toast(
-      nowFav ? t("propertyDetail.savedProperty") : t("propertyDetail.saveProperty"),
-      nowFav ? `❤️ ${locale === "ar" ? property.titleAr : property.titleEn}` : `💔 ${locale === "ar" ? property.titleAr : property.titleEn}`
-    );
-  }, [property, toggleFavorite, t, locale]);
-
-  const handleCompareToggle = useCallback(() => {
-    if (!property) return;
-    const result = toggleCompare(property.id);
-    const inCompare = isInCompare(property.id);
-    if (result === false && !inCompare) {
-      toast.warning(t("common.selectUpTo3"));
-      return;
-    }
-    toast(
-      inCompare ? t("common.removed") : t("common.added"),
-      inCompare ? `📊 ${locale === "ar" ? property.titleAr : property.titleEn}` : `📊 ${locale === "ar" ? property.titleAr : property.titleEn}`
-    );
-  }, [property, toggleCompare, isInCompare, t, locale]);
-
-
-
   if (loading) {
     return (
-      <div className="py-8 md:py-12">
-        <div className="container mx-auto px-4">
-          <Skeleton className="h-6 w-64 mb-6" />
-          <Skeleton className="h-96 w-full mb-6 rounded-xl" />
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-4">
-              <Skeleton className="h-8 w-3/4" />
-              <Skeleton className="h-6 w-1/2" />
-              <Skeleton className="h-40 w-full" />
-            </div>
-            <Skeleton className="h-80 w-full rounded-xl" />
+      <div className="container mx-auto px-4 py-8 md:py-12">
+        <Skeleton className="mb-5 h-9 w-44" />
+        <Skeleton className="mb-8 h-[420px] w-full rounded-3xl" />
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="space-y-4">
+            <Skeleton className="h-12 w-3/4" />
+            <Skeleton className="h-6 w-1/2" />
+            <Skeleton className="h-52 w-full rounded-2xl" />
           </div>
+          <Skeleton className="h-[520px] rounded-2xl" />
         </div>
       </div>
     );
   }
 
-  if (!property) {
+  if (!property || error) {
     return (
-      <div className="py-16 text-center container mx-auto px-4">
-        <h2 className="text-2xl font-bold mb-4">{t("common.noResults")}</h2>
-        <Button onClick={back}>{t("common.back")}</Button>
+      <div className="container mx-auto flex min-h-[55vh] flex-col items-center justify-center px-4 text-center">
+        <Building2 className="mb-4 h-14 w-14 text-muted-foreground/35" />
+        <h1 className="text-2xl font-bold">{copy("property.notFound", "Property not found")}</h1>
+        <p className="mt-2 max-w-md text-muted-foreground">{error}</p>
+        <Button className="mt-6" onClick={() => navigate("properties")}>
+          {copy("property.browse", "Browse properties")}
+        </Button>
       </div>
     );
   }
 
   const title = locale === "ar" ? property.titleAr : property.titleEn;
-  const description = locale === "ar" ? property.descriptionAr : property.descriptionEn;
+  const description =
+    locale === "ar" ? property.descriptionAr : property.descriptionEn;
   const location = locale === "ar" ? property.locationAr : property.locationEn;
   const address = locale === "ar" ? property.addressAr : property.addressEn;
-  const imageList = property.images ? property.images.split(",") : [];
-  const featuresList = property.features ? property.features.split(",") : [];
-  const statusLabel = property.status === "sale" ? t("common.forSale") : t("common.forRent");
-  const statusColor = property.status === "sale" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground";
-  const favorited = isFavorite(property.id);
-  const inCompare = isInCompare(property.id);
-  const monthlyPayment = calculateMonthlyPayment(property.price);
-  const formattedDate = property.createdAt
-    ? new Date(property.createdAt).toLocaleDateString(locale === "ar" ? "ar-SA" : "en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
-    : "—";
-  const updatedDate = property.updatedAt
-    ? new Date(property.updatedAt).toLocaleDateString(locale === "ar" ? "ar-SA" : "en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
-    : "—";
+  const agent = property.agent ?? null;
+  const agentName = agent
+    ? locale === "ar"
+      ? agent.nameAr
+      : agent.nameEn
+    : "";
+  const agentTitle = agent
+    ? locale === "ar"
+      ? agent.titleAr
+      : agent.titleEn
+    : "";
+  const imageList = property.images
+    ? property.images.split(",").map((item) => item.trim()).filter(Boolean)
+    : [];
+  const features = property.features
+    ? property.features.split(",").map((item) => item.trim()).filter(Boolean)
+    : [];
+  const panoramas = property.virtualTourImages
+    ? property.virtualTourImages.split(",").map((item) => item.trim()).filter(Boolean)
+    : [];
+  const hasTour = Boolean(property.virtualTourUrl || panoramas.length);
+  const favorite = isFavorite(property.id);
+  const compared = isInCompare(property.id);
+  const estimatedPayment = monthlyPayment(property.price);
+  const statusLabel =
+    property.status === "sale" ? t("common.forSale") : t("common.forRent");
+
+  const saveFavorite = () => {
+    const saved = toggleFavorite(property.id);
+    toast.success(
+      saved
+        ? copy("propertyDetail.savedProperty", "Property saved")
+        : copy("propertyDetail.removedProperty", "Property removed from favorites")
+    );
+  };
+
+  const saveCompare = () => {
+    const wasCompared = isInCompare(property.id);
+    const result = toggleCompare(property.id);
+    if (!wasCompared && !result) {
+      toast.warning(t("common.selectUpTo3"));
+      return;
+    }
+    toast.success(
+      wasCompared ? t("common.removeFromCompare") : t("common.addToCompare")
+    );
+  };
 
   return (
-    <div className="py-8 md:py-12">
-      <div className="container mx-auto px-4">
-        {/* Breadcrumbs */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-4"
-        >
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink
-                  className="cursor-pointer"
-                  onClick={() => navigate("home")}
-                >
-                  <Home className="w-3.5 h-3.5 inline-block me-1" />
-                  {t("common.home")}
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator>
-                <ChevronRightIcon className="w-3.5 h-3.5" />
-              </BreadcrumbSeparator>
-              <BreadcrumbItem>
-                <BreadcrumbLink
-                  className="cursor-pointer"
-                  onClick={() => navigate("properties")}
-                >
-                  {t("common.properties")}
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator>
-                <ChevronRightIcon className="w-3.5 h-3.5" />
-              </BreadcrumbSeparator>
-              <BreadcrumbItem>
-                <BreadcrumbPage className="truncate max-w-[200px]">
-                  {title}
-                </BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </motion.div>
-
-        {/* Back Button */}
-        <Button variant="ghost" onClick={back} className="mb-4 gap-2">
-          <ArrowLeft className="w-4 h-4" />
+    <div className="container mx-auto px-4 py-8 md:py-12">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <Button variant="ghost" onClick={back} className="gap-2">
+          <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
           {t("common.back")}
         </Button>
-
-        {/* Image Gallery — Prominent hero */}
-        <PropertyGallery
-          images={imageList}
-          title={title}
-          statusLabel={statusLabel}
-          statusColor={statusColor}
-        />
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Title, Price & Action Buttons */}
-            <RevealSection>
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4">
-                <div>
-                  <h1 className="text-2xl md:text-3xl font-bold mb-2">{title}</h1>
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <MapPin className="w-4 h-4" />
-                    <span>{address}, {location}</span>
-                  </div>
-                  {/* Property ID and dates */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
-                        {t("propertyDetail.propertyId")}
-                      </Badge>
-                      {property.id ? property.id.slice(0, 8).toUpperCase() : "—"}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {t("propertyDetail.listedOn")}: {formattedDate}
-                    </span>
-                    {property.updatedAt && (
-                      <span className="flex items-center gap-1">
-                        {t("propertyDetail.lastUpdated")}: {updatedDate}
-                      </span>
-                    )}
-                  </div>
-                  {/* Share & Save buttons near title */}
-                  <div className="flex items-center gap-2 mt-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={`gap-1.5 transition-all duration-200 ${favorited ? "bg-red-50 hover:bg-red-100 border-red-200 text-red-600 dark:bg-red-950/30 dark:border-red-800/50 dark:text-red-400" : ""}`}
-                      onClick={handleFavoriteToggle}
-                    >
-                      <Heart className={`w-4 h-4 transition-all duration-200 ${favorited ? "fill-red-500 text-red-500 scale-110" : ""}`} />
-                      {favorited ? t("propertyDetail.saved") : t("propertyDetail.save")}
-                    </Button>
-
-                    <SharePropertyDialog
-                      propertyId={property.id}
-                      propertyTitle={title}
-                      trigger={
-                        <Button variant="outline" size="sm" className="gap-1.5">
-                          <Share2 className="w-4 h-4" />
-                          {t("propertyDetail.share")}
-                        </Button>
-                      }
-                    />
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="gap-1.5">
-                          <Copy className="w-4 h-4" />
-                          {t("propertyDetail.more")}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-48">
-                        <DropdownMenuItem onClick={handleShare} className="cursor-pointer">
-                          <Copy className="w-4 h-4 me-2" />
-                          {t("propertyDetail.shareLink")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleEmailShare} className="cursor-pointer">
-                          <Send className="w-4 h-4 me-2" />
-                          {t("propertyDetail.shareViaEmail")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => window.print()}
-                          className="cursor-pointer"
-                        >
-                          <ExternalLink className="w-4 h-4 me-2" />
-                          {t("propertyDetail.printFlyer")}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-
-                  {/* Social Share Buttons */}
-                  <div className="mt-3">
-                    <ShareButtons
-                      propertyTitle={title}
-                      propertyUrl={typeof window !== "undefined" ? window.location.href : ""}
-                      propertyImage={imageList[0] || undefined}
-                    />
-                  </div>
-                </div>
-                <div className="text-start sm:text-end">
-                  <div className="text-3xl font-bold text-primary">
-                    {t("common.currency")}{property.price.toLocaleString()}
-                    {property.status === "rent" && <span className="text-base font-normal text-muted-foreground">{t("common.perMonth")}</span>}
-                  </div>
-                  <Badge variant="secondary" className="mt-1">{t(`properties.${property.type}`)}</Badge>
-                </div>
-              </div>
-            </RevealSection>
-
-            {/* Overview Stats */}
-            <RevealSection delay={0.05}>
-              <Card>
-                <CardContent className="p-6">
-                  <h2 className="text-lg font-semibold mb-4">{t("propertyDetail.overview")}</h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-                    <div className="text-center p-3 rounded-lg bg-muted/50">
-                      <Bed className="w-5 h-5 text-primary mx-auto mb-1" />
-                      <div className="text-xl font-bold">{property.bedrooms}</div>
-                      <div className="text-xs text-muted-foreground">{t("common.beds")}</div>
-                    </div>
-                    <div className="text-center p-3 rounded-lg bg-muted/50">
-                      <Bath className="w-5 h-5 text-primary mx-auto mb-1" />
-                      <div className="text-xl font-bold">{property.bathrooms}</div>
-                      <div className="text-xs text-muted-foreground">{t("common.baths")}</div>
-                    </div>
-                    <div className="text-center p-3 rounded-lg bg-muted/50">
-                      <Maximize className="w-5 h-5 text-primary mx-auto mb-1" />
-                      <div className="text-xl font-bold">{property.area}</div>
-                      <div className="text-xs text-muted-foreground">{t("common.sqft")}</div>
-                    </div>
-                    <div className="text-center p-3 rounded-lg bg-muted/50">
-                      <Calendar className="w-5 h-5 text-primary mx-auto mb-1" />
-                      <div className="text-xl font-bold">{property.yearBuilt || "—"}</div>
-                      <div className="text-xs text-muted-foreground">{t("propertyDetail.yearBuilt")}</div>
-                    </div>
-                    <div className="text-center p-3 rounded-lg bg-muted/50">
-                      <Car className="w-5 h-5 text-primary mx-auto mb-1" />
-                      <div className="text-xl font-bold">{property.parking}</div>
-                      <div className="text-xs text-muted-foreground">{t("propertyDetail.parking")}</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </RevealSection>
-
-            {/* Description */}
-            <RevealSection delay={0.1}>
-              <Card>
-                <CardContent className="p-6">
-                  <h2 className="text-lg font-semibold mb-4">{t("propertyDetail.description")}</h2>
-                  <p className="text-muted-foreground leading-relaxed whitespace-pre-line">{description}</p>
-                </CardContent>
-              </Card>
-            </RevealSection>
-
-            {/* Features */}
-            {featuresList.length > 0 && (
-              <RevealSection delay={0.1}>
-                <Card>
-                  <CardContent className="p-6">
-                    <h2 className="text-lg font-semibold mb-4">{t("propertyDetail.amenities")}</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {featuresList.map((feature, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <CheckCircle className="w-4 h-4 text-primary shrink-0" />
-                          <span className="text-sm">{feature.trim()}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </RevealSection>
-            )}
-
-            {/* Virtual Tour Section */}
-            <RevealSection delay={0.15}>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold">{t("propertyDetail.virtualTour")}</h2>
-                    {(property.virtualTourImages || property.virtualTourUrl) && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5"
-                        onClick={() => navigate("virtual-tour", { propertyId: property.id })}
-                      >
-                        <Maximize className="w-4 h-4" />
-                        {t("virtualTour.openFullTour")}
-                      </Button>
-                    )}
-                  </div>
-                  {(property.virtualTourImages || property.virtualTourUrl) ? (
-                    <PanoramicViewer
-                      images={
-                        property.virtualTourImages
-                          ? property.virtualTourImages.split(",").map((url: string) => url.trim()).filter(Boolean)
-                          : property.virtualTourUrl
-                            ? [property.virtualTourUrl]
-                            : imageList
-                      }
-                      autoRotate={true}
-                      roomLabels={
-                        property.virtualTourImages
-                          ? property.virtualTourImages.split(",").map((_: string, idx: number) =>
-                              locale === "ar"
-                                ? [t("property.rooms.livingRoom"), t("property.rooms.masterBedroom"), t("property.rooms.kitchen"), t("property.rooms.bathroom"), t("property.rooms.balcony"), t("property.rooms.diningRoom"), t("property.rooms.guestRoom"), t("property.rooms.study"), t("property.rooms.garage"), t("property.rooms.garden")][idx]
-                                : [t("property.rooms.livingRoom"), t("property.rooms.masterBedroom"), t("property.rooms.kitchen"), t("property.rooms.bathroom"), t("property.rooms.balcony"), t("property.rooms.diningRoom"), t("property.rooms.guestRoom"), t("property.rooms.study"), t("property.rooms.garage"), t("property.rooms.garden")][idx]
-                            )
-                          : undefined
-                      }
-                      onOpenFullTour={() => navigate("virtual-tour", { propertyId: property.id })}
-                    />
-                  ) : (
-                    <div className="relative h-64 sm:h-80 rounded-xl overflow-hidden bg-primary flex items-center justify-center">
-                      {/* Subtle dot pattern */}
-                      <div className="absolute inset-0 opacity-10" style={{
-                        backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.3) 1px, transparent 1px)`,
-                        backgroundSize: "32px 32px",
-                      }} />
-
-                      <div className="relative z-10 text-center">
-                        <div className="w-20 h-20 rounded-full bg-white/15 flex items-center justify-center mx-auto mb-4 border border-white/20">
-                          <Play className="w-8 h-8 text-primary-foreground ms-1" />
-                        </div>
-                        <p className="text-white/80 text-sm mb-4 max-w-sm">
-                          {t("virtualTour.noTourAvailable")}
-                        </p>
-                        <p className="text-white/60 text-xs max-w-sm">
-                          {t("virtualTour.noTourDesc")}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </RevealSection>
-
-            {/* Map Section */}
-            <RevealSection delay={0.15}>
-              <Card>
-                <CardContent className="p-6">
-                  <h2 className="text-lg font-semibold mb-4">{t("propertyDetail.location")}</h2>
-                  {property.lat && property.lng ? (
-                    <PropertyMap
-                      properties={[{
-                        id: property.id,
-                        titleEn: property.titleEn,
-                        titleAr: property.titleAr,
-                        price: property.price,
-                        lat: property.lat,
-                        lng: property.lng,
-                        type: property.type,
-                        status: property.status,
-                        images: property.images,
-                        bedrooms: property.bedrooms,
-                        bathrooms: property.bathrooms,
-                        area: property.area,
-                        locationEn: property.locationEn,
-                        locationAr: property.locationAr,
-                      }]}
-                      height="h-[300px]"
-                      singleProperty={true}
-                    />
-                  ) : (
-                    <div className="h-64 rounded-xl bg-muted flex items-center justify-center">
-                      <div className="text-center text-muted-foreground">
-                        <MapPin className="w-8 h-8 mx-auto mb-2" />
-                        <p className="text-sm">{address}, {location}</p>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </RevealSection>
-
-            {/* Walk Score Section — data not available from API */}
-            <RevealSection delay={0.2}>
-              <Card>
-                <CardContent className="p-6">
-                  <h2 className="text-lg font-semibold mb-5">{t("walkScore.title")}</h2>
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <Footprints className="w-10 h-10 text-muted-foreground/40 mb-3" />
-                    <p className="text-sm text-muted-foreground">
-                      {t("propertyDetail.scoresNotAvailable")}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            </RevealSection>
-
-            {/* Price History Section */}
-            <RevealSection delay={0.2}>
-              <Card>
-                <CardContent className="p-6">
-                  <h2 className="text-lg font-semibold mb-5">{t("priceHistory.title")}</h2>
-
-                  {/* Current Price & Stats */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                    {/* Current Price */}
-                    <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
-                      <p className="text-xs text-muted-foreground mb-1">{t("priceHistory.currentPrice")}</p>
-                      <p className="text-xl font-bold text-primary">
-                        {t("common.currency")}{property.price.toLocaleString()}
-                      </p>
-                    </div>
-
-                    {/* Days on Market & Price/sqft */}
-                    <div className="p-4 rounded-xl bg-muted/50 border border-border/50">
-                      <p className="text-xs text-muted-foreground mb-1">{t("priceHistory.daysOnMarket")}</p>
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-4 h-4 text-primary" />
-                        <span className="text-lg font-bold">
-                          {property.createdAt
-                            ? Math.max(1, Math.floor((Date.now() - new Date(property.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
-                            : "—"}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {t("priceHistory.pricePerSqft")}: {t("common.currency")}{Math.round(property.price / property.area).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Price History — not available */}
-                  <div className="flex flex-col items-center justify-center py-6 text-center">
-                    <TrendingUp className="w-10 h-10 text-muted-foreground/40 mb-3" />
-                    <p className="text-sm text-muted-foreground">
-                      {t("propertyDetail.noPriceHistory")}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            </RevealSection>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Agent Card — No gradient, design tokens */}
-            {property.agent && (
-              <RevealSection delay={0.1}>
-                <Card className="overflow-hidden">
-                  {/* Clean header with design tokens */}
-                  <div className="bg-primary p-4">
-                    <h2 className="text-lg font-semibold text-primary-foreground">{t("propertyDetail.contactAgent")}</h2>
-                    <p className="text-primary-foreground/80 text-sm">{t("propertyDetail.scheduleVisit")}</p>
-                  </div>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <img
-                        src={property.agent.image || `https://placehold.co/80x80/e2e8f0/64748b?text=Agent`}
-                        alt={locale === "ar" ? property.agent.nameAr : property.agent.nameEn}
-                        className="w-14 h-14 rounded-full object-cover border-2 border-primary/20"
-                      />
-                      <div>
-                        <p className="font-semibold">{locale === "ar" ? property.agent.nameAr : property.agent.nameEn}</p>
-                        <p className="text-sm text-muted-foreground">{locale === "ar" ? property.agent.titleAr : property.agent.titleEn}</p>
-                        {property.agent.rating > 0 && (
-                          <div className="flex items-center gap-1 mt-1">
-                            {Array.from({ length: 5 }, (_, i) => (
-                              <Star key={i} className={`w-3 h-3 ${i < Math.round(property.agent.rating) ? "fill-amber-400 text-amber-400" : "text-muted"}`} />
-                            ))}
-                            <span className="text-xs text-muted-foreground ms-1">{property.agent.rating}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="space-y-2 mb-4">
-                      <p className="text-sm text-muted-foreground flex items-center gap-2">
-                        <Send className="w-3.5 h-3.5" /> {property.agent.email}
-                      </p>
-                      <p className="text-sm text-muted-foreground flex items-center gap-2">
-                        <Phone className="w-3.5 h-3.5" /> {property.agent.phone}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 gap-1.5"
-                        onClick={() => navigate("agents")}
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        {t("agents.viewProperties")}
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="flex-1 gap-1.5"
-                        onClick={() => {
-                          window.open(`tel:${property.agent.phone}`);
-                        }}
-                      >
-                        <Phone className="w-3.5 h-3.5" />
-                        {t("propertyDetail.call")}
-                      </Button>
-                    </div>
-                    {/* Schedule Tour Button — btn-gold */}
-                    <ScheduleTourDialog
-                      propertyId={property.id}
-                      propertyTitle={title}
-                      trigger={
-                        <Button className="w-full mt-3 btn-gold gap-2" size="sm">
-                          <Calendar className="w-4 h-4" />
-                          {t("tour.scheduleTour")}
-                        </Button>
-                      }
-                    />
-                    {/* Message Agent Button */}
-                    <Button
-                      variant="outline"
-                      className="w-full mt-2 gap-2"
-                      size="sm"
-                      onClick={() => navigate("messaging", { agentId: property.agent!.id, propertyId: property.id })}
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      {t("messaging.messageAgent")}
-                    </Button>
-                  </CardContent>
-                </Card>
-              </RevealSection>
-            )}
-
-            {/* Schedule Tour Card (always visible when no agent) — No gradient, design tokens */}
-            {!property.agent && (
-              <RevealSection delay={0.1}>
-                <Card className="overflow-hidden">
-                  <div className="bg-primary p-4">
-                    <h2 className="text-lg font-semibold text-primary-foreground">{t("tour.scheduleTour")}</h2>
-                    <p className="text-primary-foreground/80 text-sm">{t("propertyDetail.scheduleVisit")}</p>
-                  </div>
-                  <CardContent className="p-6 text-center">
-                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                      <Calendar className="w-8 h-8 text-primary" />
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {t("propertyDetail.bookTourDesc")}
-                    </p>
-                    <ScheduleTourDialog
-                      propertyId={property.id}
-                      propertyTitle={title}
-                      trigger={
-                        <Button className="w-full btn-gold gap-2">
-                          <Calendar className="w-4 h-4" />
-                          {t("tour.scheduleTour")}
-                        </Button>
-                      }
-                    />
-                  </CardContent>
-                </Card>
-              </RevealSection>
-            )}
-
-            {/* Mortgage Estimate Widget */}
-            <RevealSection delay={0.15}>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Calculator className="w-5 h-5 text-primary" />
-                    <h2 className="text-lg font-semibold">{t("propertyDetail.mortgageEstimate")}</h2>
-                  </div>
-                  <Separator className="mb-4" />
-                  <div className="text-center mb-4">
-                    <p className="text-sm text-muted-foreground mb-1">{t("propertyDetail.estimatedMonthly")}</p>
-                    <p className="text-3xl font-bold text-primary">
-                      {t("common.currency")}{Math.round(monthlyPayment).toLocaleString()}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {t("propertyDetail.atRate")}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm mb-4">
-                    <div className="bg-muted/50 rounded-xl p-2.5 text-center">
-                      <p className="text-xs text-muted-foreground">{t("calculator.loanAmount")}</p>
-                      <p className="font-semibold">
-                        {t("common.currency")}{Math.round(property.price * 0.8).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="bg-muted/50 rounded-xl p-2.5 text-center">
-                      <p className="text-xs text-muted-foreground">{t("calculator.downPayment")}</p>
-                      <p className="font-semibold">
-                        {t("common.currency")}{Math.round(property.price * 0.2).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="w-full gap-2"
-                    onClick={() => navigate("calculator")}
-                  >
-                    <Calculator className="w-4 h-4" />
-                    {t("propertyDetail.fullMortgageCalculator")}
-                  </Button>
-                </CardContent>
-              </Card>
-            </RevealSection>
-
-            {/* Commute Times Card */}
-            <RevealSection delay={0.18}>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Route className="w-5 h-5 text-primary" />
-                    <h2 className="text-lg font-semibold">{t("commute.commuteTimes")}</h2>
-                  </div>
-                  <Separator className="mb-4" />
-                  {property.lat && property.lng ? (
-                    <>
-                      <div className="space-y-2.5 mb-4">
-                        {[
-                          { name: t("commute.downtown"), lat: 40.758, lng: -73.9855 },
-                          { name: t("commute.airport"), lat: 40.6413, lng: -73.7781 },
-                          { name: t("commute.centralStation"), lat: 40.7527, lng: -73.9772 },
-                        ].map((dest) => {
-                          const R = 6371;
-                          const dLat = (dest.lat - property.lat!) * Math.PI / 180;
-                          const dLng = (dest.lng - property.lng!) * Math.PI / 180;
-                          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                            Math.cos(property.lat! * Math.PI / 180) * Math.cos(dest.lat * Math.PI / 180) *
-                            Math.sin(dLng/2) * Math.sin(dLng/2);
-                          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                          const dist = R * c;
-                          const drivingTime = Math.round((dist / 40) * 1.3 * 60);
-                          const indicator = drivingTime < 15 ? "🟢" : drivingTime < 30 ? "🟡" : drivingTime < 45 ? "🟠" : "🔴";
-
-                          return (
-                            <div key={dest.name} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm">{indicator}</span>
-                                <span className="text-xs font-medium">{dest.name}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Car className="w-3 h-3 text-muted-foreground" />
-                                <span className="text-xs font-semibold">{drivingTime} {t("commute.minutes")}</span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <Button
-                        variant="outline"
-                        className="w-full gap-2"
-                        onClick={() => navigate("commute")}
-                      >
-                        <Route className="w-4 h-4" />
-                        {t("commute.openCalculator")}
-                      </Button>
-                    </>
-                  ) : (
-                    <div className="text-center py-4">
-                      <MapPin className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-                      <p className="text-xs text-muted-foreground">
-                        {t("propertyDetail.locationNotAvailable")}
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </RevealSection>
-
-            {/* Inquiry Form */}
-            <RevealSection delay={0.2}>
-              <Card>
-                <CardContent className="p-6">
-                  <h2 className="text-lg font-semibold mb-4">{t("propertyDetail.requestInfo")}</h2>
-                  <form onSubmit={handleInquiry} className="space-y-3">
-                    <Input
-                      placeholder={t("propertyDetail.name")}
-                      value={inquiryForm.name}
-                      onChange={(e) => setInquiryForm({ ...inquiryForm, name: e.target.value })}
-                      required
-                    />
-                    <Input
-                      type="email"
-                      placeholder={t("propertyDetail.email")}
-                      value={inquiryForm.email}
-                      onChange={(e) => setInquiryForm({ ...inquiryForm, email: e.target.value })}
-                      required
-                    />
-                    <Input
-                      type="tel"
-                      placeholder={t("propertyDetail.phone")}
-                      value={inquiryForm.phone}
-                      onChange={(e) => setInquiryForm({ ...inquiryForm, phone: e.target.value })}
-                    />
-                    <Textarea
-                      placeholder={t("propertyDetail.message")}
-                      value={inquiryForm.message}
-                      onChange={(e) => setInquiryForm({ ...inquiryForm, message: e.target.value })}
-                      rows={4}
-                      required
-                    />
-                    <Button type="submit" className="w-full btn-gold" disabled={submitting}>
-                      {submitting ? t("common.loading") : t("propertyDetail.send")}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-            </RevealSection>
-          </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={saveFavorite}
+            aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
+            aria-pressed={favorite}
+          >
+            <Heart className={cn("h-4 w-4", favorite && "fill-red-500 text-red-500")} />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={saveCompare}
+            aria-label={compared ? t("common.removeFromCompare") : t("common.addToCompare")}
+            aria-pressed={compared}
+          >
+            <CheckCircle2 className={cn("h-4 w-4", compared && "text-primary")} />
+          </Button>
+          <SharePropertyDialog
+            propertyId={property.id}
+            propertyTitle={title}
+            trigger={
+              <Button variant="outline" size="icon" aria-label={t("share.share")}>
+                <Share2 className="h-4 w-4" />
+              </Button>
+            }
+          />
         </div>
-
-        {/* Similar Properties */}
-        {similarProperties.length > 0 && (
-          <RevealSection delay={0.1}>
-            <div className="mt-12">
-              <h2 className="text-2xl font-bold mb-6">{t("propertyDetail.similarProperties")}</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {similarProperties.map((p) => (
-                  <PropertyCard key={p.id} property={p} />
-                ))}
-              </div>
-            </div>
-          </RevealSection>
-        )}
-
-        {/* Property Reviews */}
-        <RevealSection delay={0.15}>
-          <PropertyReviews propertyId={property.id} />
-        </RevealSection>
       </div>
 
+      <PropertyGallery
+        images={imageList}
+        title={title}
+        statusLabel={statusLabel}
+        statusColor={
+          property.status === "sale"
+            ? "bg-primary text-primary-foreground"
+            : "bg-slate-700 text-white"
+        }
+      />
+
+      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <main className="min-w-0 space-y-8">
+          <section>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge>{statusLabel}</Badge>
+              <Badge variant="outline" className="capitalize">
+                {copy(`properties.${property.type}`, property.type)}
+              </Badge>
+              {property.featured ? (
+                <Badge variant="secondary" className="gap-1">
+                  <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                  {copy("property.verified", "Verified")}
+                </Badge>
+              ) : null}
+            </div>
+            <h1 className="mt-4 text-3xl font-bold tracking-tight md:text-5xl">{title}</h1>
+            <p className="mt-3 flex items-center gap-2 text-muted-foreground">
+              <MapPin className="h-4 w-4 shrink-0" />
+              {location}{address ? ` · ${address}` : ""}
+            </p>
+            <div className="mt-5 flex items-end gap-2">
+              <span className="text-3xl font-bold text-primary md:text-4xl">
+                {t("common.currency")}
+                {property.price.toLocaleString(locale === "ar" ? "ar-IQ" : "en-US")}
+              </span>
+              {property.status === "rent" ? (
+                <span className="pb-1 text-muted-foreground">{t("common.perMonth")}</span>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <DetailStat icon={Bed} value={String(property.bedrooms)} label={t("properties.bedrooms")} />
+            <DetailStat icon={Bath} value={String(property.bathrooms)} label={t("properties.bathrooms")} />
+            <DetailStat icon={Maximize} value={`${property.area.toLocaleString()} ${t("common.sqft")}`} label={copy("propertyDetail.livingArea", "Living area")} />
+            <DetailStat icon={Car} value={String(property.parking)} label={copy("propertyDetail.parking", "Parking spaces")} />
+          </section>
+
+          <Card className="rounded-2xl border-border/70">
+            <CardHeader><CardTitle>{copy("propertyDetail.description", "About this property")}</CardTitle></CardHeader>
+            <CardContent>
+              <p className="whitespace-pre-line leading-7 text-muted-foreground">{description}</p>
+            </CardContent>
+          </Card>
+
+          {features.length ? (
+            <Card className="rounded-2xl border-border/70">
+              <CardHeader><CardTitle>{copy("propertyDetail.features", "Features and amenities")}</CardTitle></CardHeader>
+              <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {features.map((feature) => (
+                  <div key={feature} className="flex items-center gap-2 rounded-xl bg-muted/40 p-3 text-sm">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                    {feature}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <Card className="rounded-2xl border-border/70">
+            <CardHeader className="flex-row items-center justify-between gap-4">
+              <div>
+                <CardTitle>{copy("propertyDetail.location", "Location")}</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">{location}</p>
+              </div>
+              <MapPin className="h-5 w-5 text-primary" />
+            </CardHeader>
+            <CardContent>
+              {property.lat != null && property.lng != null ? (
+                <PropertyMap properties={[property]} singleProperty height="h-[360px]" />
+              ) : (
+                <div className="flex h-48 items-center justify-center rounded-xl bg-muted/40 text-sm text-muted-foreground">
+                  {copy("mapView.noLocationData", "Map coordinates are not available for this property.")}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <PropertyReviews propertyId={property.id} />
+
+          {similar.length ? (
+            <section>
+              <div className="mb-5 flex items-end justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold">{copy("propertyDetail.similarProperties", "Similar properties")}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{copy("propertyDetail.similarSubtitle", "More listings that may fit your search.")}</p>
+                </div>
+                <Button variant="outline" onClick={() => navigate("properties", { type: property.type })}>
+                  {t("common.viewAll")}
+                </Button>
+              </div>
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {similar.map((item) => <PropertyCard key={item.id} property={item} />)}
+              </div>
+            </section>
+          ) : null}
+        </main>
+
+        <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
+          <Card className="rounded-2xl border-border/70 shadow-sm">
+            <CardContent className="p-5">
+              {agent ? (
+                <>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-14 w-14">
+                      {agent.image ? <AvatarImage src={agent.image} alt={agentName} /> : null}
+                      <AvatarFallback>{initials(agentName)}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold">{agentName}</p>
+                      <p className="truncate text-sm text-muted-foreground">{agentTitle}</p>
+                      <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        {agent.rating.toFixed(1)}
+                      </div>
+                    </div>
+                  </div>
+                  <Separator className="my-5" />
+                  <div className="grid gap-2">
+                    <Button
+                      onClick={() =>
+                        navigate("messaging", {
+                          agentId: agent.id,
+                          propertyId: property.id,
+                        })
+                      }
+                      className="gap-2"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      {copy("propertyDetail.messageAgent", "Message agent")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => window.open(`tel:${agent.phone}`)}
+                      className="gap-2"
+                    >
+                      <Phone className="h-4 w-4" />
+                      {agent.phone}
+                    </Button>
+                    <ScheduleTourDialog
+                      propertyId={property.id}
+                      propertyTitle={title}
+                      trigger={
+                        <Button variant="outline" className="w-full gap-2">
+                          <Calendar className="h-4 w-4" />
+                          {copy("tour.schedule", "Schedule a tour")}
+                        </Button>
+                      }
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="text-center">
+                  <Building2 className="mx-auto mb-3 h-9 w-9 text-muted-foreground/40" />
+                  <p className="font-semibold">{copy("propertyDetail.noAgent", "Agent not assigned")}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{copy("propertyDetail.contactOffice", "Contact the EstatePro team for assistance.")}</p>
+                  <Button className="mt-4" onClick={() => navigate("contact")}>
+                    {t("common.contact")}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {hasTour ? (
+            <Card className="overflow-hidden rounded-2xl border-primary/25 bg-primary/5">
+              <CardContent className="p-5">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                  <PlayCircle className="h-5 w-5" />
+                </div>
+                <h3 className="mt-4 font-semibold">{copy("virtualTour.title", "Virtual property tour")}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{copy("virtualTour.subtitle", "Explore rooms and spaces before scheduling a visit.")}</p>
+                <Button className="mt-4 w-full" onClick={() => navigate("virtual-tour", { propertyId: property.id })}>
+                  {copy("virtualTour.start", "Start virtual tour")}
+                </Button>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <Card className="rounded-2xl border-border/70">
+            <CardContent className="p-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Calculator className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">{copy("propertyDetail.estimatedPayment", "Estimated monthly payment")}</p>
+                  <p className="text-xl font-bold">{t("common.currency")}{Math.round(estimatedPayment).toLocaleString()}</p>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">{copy("propertyDetail.paymentAssumption", "Estimate assumes 20% down, a 30-year term, and 6.5% interest.")}</p>
+              <Button variant="outline" className="mt-4 w-full" onClick={() => navigate("calculator")}>
+                {t("common.calculator")}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-border/70">
+            <CardHeader><CardTitle className="text-base">{copy("contact.inquiry", "Ask about this property")}</CardTitle></CardHeader>
+            <CardContent>
+              <form onSubmit={submitInquiry} className="space-y-3">
+                <Input required value={inquiry.name} onChange={(event) => setInquiry((current) => ({ ...current, name: event.target.value }))} placeholder={copy("contact.name", "Name")} />
+                <Input required type="email" value={inquiry.email} onChange={(event) => setInquiry((current) => ({ ...current, email: event.target.value }))} placeholder={copy("contact.email", "Email")} />
+                <Input value={inquiry.phone} onChange={(event) => setInquiry((current) => ({ ...current, phone: event.target.value }))} placeholder={copy("contact.phone", "Phone")} />
+                <Textarea required value={inquiry.message} onChange={(event) => setInquiry((current) => ({ ...current, message: event.target.value }))} placeholder={copy("contact.message", "How can we help?")} rows={4} />
+                <Button className="w-full gap-2" disabled={submitting}>
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {copy("contact.send", "Send inquiry")}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </aside>
+      </div>
     </div>
   );
 }
