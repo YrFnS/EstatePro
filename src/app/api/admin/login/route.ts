@@ -8,15 +8,31 @@ import {
   adminCookieOptions,
   createAdminSession,
 } from "@/lib/admin-auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 function legacyHash(password: string): string {
   return createHash("sha256").update(password).digest("hex");
 }
 
 export async function POST(request: NextRequest) {
+  const limit = checkRateLimit(request, "admin-login", {
+    limit: 8,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Too many login attempts. Please try again later." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limit.retryAfter) },
+      }
+    );
+  }
+
   try {
     const body = await request.json();
-    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const email =
+      typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const password = typeof body.password === "string" ? body.password : "";
 
     if (!email || !password || email.length > 320 || password.length > 256) {
