@@ -1,31 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import {
+  ADMIN_NONCE_COOKIE,
+  ADMIN_SESSION_COOKIE,
+  verifyAdminSession,
+} from "@/lib/admin-auth";
 
 export async function GET(request: NextRequest) {
+  const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
+  const nonce = request.cookies.get(ADMIN_NONCE_COOKIE)?.value;
+  const session = verifyAdminSession(token, nonce);
+
+  if (!session) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   try {
-    const token = request.cookies.get("admin_token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
-    }
-
-    // Decode the simple token: base64(userId:email:role)
-    const decoded = Buffer.from(token, "base64").toString("utf-8");
-    const [userId, email, role] = decoded.split(":");
-
-    if (!userId || !email || !role) {
-      return NextResponse.json(
-        { error: "Invalid token" },
-        { status: 401 }
-      );
-    }
-
-    const { db } = await import("@/lib/db");
-
     const user = await db.user.findUnique({
-      where: { id: userId },
+      where: { id: session.sub },
       select: {
         id: true,
         email: true,
@@ -34,18 +26,17 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    if (!user || user.email !== email || user.role !== role) {
-      return NextResponse.json(
-        { error: "Invalid token" },
-        { status: 401 }
-      );
+    if (
+      !user ||
+      user.role !== "admin" ||
+      user.email.toLowerCase() !== session.email.toLowerCase()
+    ) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     return NextResponse.json({ user });
-  } catch {
-    return NextResponse.json(
-      { error: "Not authenticated" },
-      { status: 401 }
-    );
+  } catch (error) {
+    console.error("Admin session lookup failed:", error);
+    return NextResponse.json({ error: "Session check failed" }, { status: 500 });
   }
 }
