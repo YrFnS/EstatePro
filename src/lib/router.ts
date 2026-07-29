@@ -36,6 +36,7 @@ const routes = {
 } as const;
 
 export type View = keyof typeof routes;
+export type NavigationParams = Record<string, string | undefined>;
 
 function getView(pathname: string): View {
   if (pathname === "/") return "home";
@@ -69,8 +70,8 @@ export function useRouter() {
   }, [pathname, searchParams, view]);
 
   const navigate = useCallback(
-    (nextView: View, nextParams?: Record<string, string>) => {
-      let destination = routes[nextView] || "/";
+    (nextView: View, nextParams?: NavigationParams) => {
+      let destination: string = routes[nextView] || "/";
 
       if (nextView === "property-detail" && nextParams?.id) {
         destination = `/properties/${encodeURIComponent(nextParams.id)}`;
