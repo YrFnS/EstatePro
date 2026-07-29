@@ -37,8 +37,14 @@ jobs:
       - name: Generate Prisma client
         run: bun run db:generate
 
+      - name: Validate Prisma schema
+        run: bunx prisma validate
+
+      - name: Test account-state behavior
+        run: bun run test
+
       - name: Type-check
-        run: bunx tsc --noEmit
+        run: bun run typecheck
 
       - name: Lint
         run: bun run lint
