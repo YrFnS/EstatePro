@@ -32,20 +32,17 @@ export async function POST(request: NextRequest) {
       size: "1024x1024",
     });
 
-    const imageData = response?.data?.[0];
-    if (imageData?.url) {
-      return NextResponse.json({ imageUrl: imageData.url });
-    }
-    if (imageData?.base64) {
-      return NextResponse.json({
-        imageUrl: `data:image/png;base64,${imageData.base64}`,
-      });
+    const base64 = response?.data?.[0]?.base64;
+    if (!base64) {
+      return NextResponse.json(
+        { error: "The image provider did not return an image." },
+        { status: 502 }
+      );
     }
 
-    return NextResponse.json(
-      { error: "The image provider did not return an image." },
-      { status: 502 }
-    );
+    return NextResponse.json({
+      imageUrl: `data:image/png;base64,${base64}`,
+    });
   } catch (error) {
     console.error("Property image generation error:", error);
     return NextResponse.json(
