@@ -1,46 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
 import ZAI from "z-ai-web-dev-sdk";
+import { checkRateLimit } from "@/lib/rate-limit";
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
+  const limit = checkRateLimit(request, "property-image", {
+    limit: 5,
+    windowMs: 10 * 60 * 1000,
+  });
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Too many image requests. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfter) } }
+    );
+  }
+
   try {
-    const { prompt } = await req.json();
+    const body = await request.json();
+    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
 
-    if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+    if (!prompt || prompt.length > 1_000) {
       return NextResponse.json(
-        { error: "A prompt is required. Example: 'modern apartment interior'" },
+        { error: "A prompt between 1 and 1,000 characters is required." },
         { status: 400 }
       );
     }
 
-    // Enhance the prompt for real estate property images
-    const enhancedPrompt = `Professional real estate photography, ${prompt.trim()}, high quality, well-lit, interior design, architectural photography style, 4k resolution`;
-
-    const zai = new ZAI();
+    const enhancedPrompt = `Professional real estate photography, ${prompt}, high quality, well-lit, interior design, architectural photography style, 4k resolution`;
+    const zai = await ZAI.create();
     const response = await zai.images.generate({
       prompt: enhancedPrompt,
       size: "1024x1024",
     });
 
-    // The SDK returns image data; we need to convert to base64 data URL
-    if (response && response.data && response.data.length > 0) {
-      const imageData = response.data[0];
-
-      // If the response contains a URL, use it directly
-      if (imageData.url) {
-        return NextResponse.json({ imageUrl: imageData.url });
-      }
-
-      // If the response contains base64 data, format as data URL
-      if (imageData.b64_json) {
-        const dataUrl = `data:image/png;base64,${imageData.b64_json}`;
-        return NextResponse.json({ imageUrl: dataUrl });
-      }
+    const imageData = response?.data?.[0];
+    if (imageData?.url) {
+      return NextResponse.json({ imageUrl: imageData.url });
+    }
+    if (imageData?.b64_json) {
+      return NextResponse.json({
+        imageUrl: `data:image/png;base64,${imageData.b64_json}`,
+      });
     }
 
-    // Fallback: return error if no image was generated
     return NextResponse.json(
-      { error: "Failed to generate image. Please try again." },
-      { status: 500 }
+      { error: "The image provider did not return an image." },
+      { status: 502 }
     );
   } catch (error) {
     console.error("Property image generation error:", error);
