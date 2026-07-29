@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     const enhancedPrompt = `Professional real estate photography, ${prompt}, high quality, well-lit, interior design, architectural photography style, 4k resolution`;
     const zai = await ZAI.create();
-    const response = await zai.images.generate({
+    const response = await zai.images.generations.create({
       prompt: enhancedPrompt,
       size: "1024x1024",
     });
