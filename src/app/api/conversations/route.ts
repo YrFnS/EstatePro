@@ -3,10 +3,15 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser, isStaffRole } from "@/lib/api-auth";
 
-const createConversationSchema = z.object({
-  participantIds: z.array(z.string().trim().min(1)).min(1).max(8),
-  propertyId: z.string().trim().min(1).nullable().optional(),
-});
+const createConversationSchema = z
+  .object({
+    participantIds: z.array(z.string().trim().min(1)).max(8).optional().default([]),
+    agentId: z.string().trim().min(1).optional(),
+    propertyId: z.string().trim().min(1).nullable().optional(),
+  })
+  .refine((value) => value.participantIds.length > 0 || Boolean(value.agentId), {
+    message: "A participant or agent is required",
+  });
 
 const participantUserSelect = {
   id: true,
@@ -88,8 +93,32 @@ export async function POST(request: NextRequest) {
     }
 
     const propertyId = parsed.data.propertyId || null;
+    const requestedParticipantIds = [...parsed.data.participantIds];
+
+    if (parsed.data.agentId) {
+      const agent = await db.agent.findUnique({
+        where: { id: parsed.data.agentId },
+        select: { email: true },
+      });
+      if (!agent) {
+        return NextResponse.json({ error: "Agent not found" }, { status: 404 });
+      }
+
+      const agentUser = await db.user.findUnique({
+        where: { email: agent.email.toLowerCase() },
+        select: { id: true },
+      });
+      if (!agentUser) {
+        return NextResponse.json(
+          { error: "This agent does not have a linked messaging account" },
+          { status: 409 }
+        );
+      }
+      requestedParticipantIds.push(agentUser.id);
+    }
+
     const participantIds = Array.from(
-      new Set([user.id, ...parsed.data.participantIds])
+      new Set([user.id, ...requestedParticipantIds])
     );
 
     if (participantIds.length < 2) {
