@@ -1,7 +1,7 @@
+import { createHash } from "node:crypto";
+import bcrypt from "bcryptjs";
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
-import crypto from "crypto";
 import { db } from "@/lib/db";
 
 export const authOptions: NextAuthOptions = {
@@ -13,41 +13,39 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+        const email = credentials?.email?.trim().toLowerCase();
+        const password = credentials?.password;
+        if (!email || !password || email.length > 320 || password.length > 256) {
           return null;
         }
 
-        const user = await db.user.findUnique({
-          where: { email: credentials.email },
-        });
+        const user = await db.user.findUnique({ where: { email } });
+        if (!user) return null;
 
-        if (!user) {
-          return null;
-        }
+        let passwordMatches = false;
+        let legacyPassword = false;
 
-        // Try bcrypt comparison first (for new users)
-        let passwordMatch = false;
         try {
-          passwordMatch = await bcrypt.compare(
-            credentials.password,
-            user.password
-          );
+          passwordMatches = await bcrypt.compare(password, user.password);
         } catch {
-          // If bcrypt compare fails, the password might be SHA256 hashed (legacy admin)
-          passwordMatch = false;
+          passwordMatches = false;
         }
 
-        // Fallback: try SHA256 comparison for legacy admin accounts
-        if (!passwordMatch) {
-          const sha256Hash = crypto
-            .createHash("sha256")
-            .update(credentials.password)
+        if (!passwordMatches) {
+          const sha256Hash = createHash("sha256")
+            .update(password)
             .digest("hex");
-          passwordMatch = sha256Hash === user.password;
+          passwordMatches = sha256Hash === user.password;
+          legacyPassword = passwordMatches;
         }
 
-        if (!passwordMatch) {
-          return null;
+        if (!passwordMatches) return null;
+
+        if (legacyPassword) {
+          await db.user.update({
+            where: { id: user.id },
+            data: { password: await bcrypt.hash(password, 12) },
+          });
         }
 
         return {
@@ -62,7 +60,7 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 30 * 24 * 60 * 60,
   },
   callbacks: {
     async jwt({ token, user }) {
