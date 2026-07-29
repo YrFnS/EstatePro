@@ -1,20 +1,32 @@
 "use client";
 
-import { useState } from "react";
-import { useI18n } from "@/lib/i18n/provider";
+import { useEffect, useState } from "react";
+import {
+  KeyRound,
+  Loader2,
+  Lock,
+  Mail,
+  User,
+  UserPlus,
+} from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import { useI18n } from "@/lib/i18n/provider";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Loader2, KeyRound, UserPlus, Mail, Lock, User } from "lucide-react";
-import { toast } from "sonner";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 
 interface AuthDialogProps {
   open: boolean;
@@ -22,41 +34,53 @@ interface AuthDialogProps {
   defaultTab?: "login" | "register";
 }
 
-export function AuthDialog({ open, onOpenChange, defaultTab = "login" }: AuthDialogProps) {
-  const { t } = useI18n();
+export function AuthDialog({
+  open,
+  onOpenChange,
+  defaultTab = "login",
+}: AuthDialogProps) {
+  const { t, locale } = useI18n();
   const { login, register } = useAuth();
-
-  // Login state
+  const [activeTab, setActiveTab] = useState<"login" | "register">(defaultTab);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-  const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [registerError, setRegisterError] = useState("");
+  const [registerLoading, setRegisterLoading] = useState(false);
 
-  // Register state
-  const [regName, setRegName] = useState("");
-  const [regEmail, setRegEmail] = useState("");
-  const [regPassword, setRegPassword] = useState("");
-  const [regConfirmPassword, setRegConfirmPassword] = useState("");
-  const [regLoading, setRegLoading] = useState(false);
-  const [regError, setRegError] = useState("");
+  useEffect(() => {
+    if (open) setActiveTab(defaultTab);
+  }, [defaultTab, open]);
 
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const closeAndReset = () => {
+    onOpenChange(false);
+    setLoginEmail("");
+    setLoginPassword("");
+    setLoginError("");
+    setName("");
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
+    setRegisterError("");
+  };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
     setLoginError("");
     setLoginLoading(true);
-
     try {
-      const result = await login(loginEmail, loginPassword);
-      if (result.success) {
-        toast.success(t("auth.signIn"));
-        onOpenChange(false);
-        setLoginEmail("");
-        setLoginPassword("");
-      } else {
+      const result = await login(loginEmail.trim().toLowerCase(), loginPassword);
+      if (!result.success) {
         setLoginError(result.error || t("auth.invalidCredentials"));
+        return;
       }
+      toast.success(t("auth.signInSuccess"));
+      closeAndReset();
     } catch {
       setLoginError(t("auth.invalidCredentials"));
     } finally {
@@ -64,150 +88,138 @@ export function AuthDialog({ open, onOpenChange, defaultTab = "login" }: AuthDia
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setRegError("");
+  const handleRegister = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setRegisterError("");
 
-    if (regPassword !== regConfirmPassword) {
-      setRegError(t("auth.passwordMismatch"));
+    if (name.trim().length < 2) {
+      setRegisterError(
+        locale === "ar" ? "أدخل اسماً صالحاً" : "Enter a valid name"
+      );
+      return;
+    }
+    if (password.length < 8) {
+      setRegisterError(
+        locale === "ar"
+          ? "يجب أن تتكون كلمة المرور من 8 أحرف على الأقل"
+          : "Password must be at least 8 characters"
+      );
+      return;
+    }
+    if (password !== confirmPassword) {
+      setRegisterError(t("auth.passwordMismatch"));
       return;
     }
 
-    if (regPassword.length < 6) {
-      setRegError(t("auth.passwordMinLength"));
-      return;
-    }
-
-    setRegLoading(true);
-
+    setRegisterLoading(true);
     try {
-      const result = await register(regName, regEmail, regPassword);
-      if (result.success) {
-        toast.success(t("auth.registrationSuccess"));
-        onOpenChange(false);
-        setRegName("");
-        setRegEmail("");
-        setRegPassword("");
-        setRegConfirmPassword("");
-      } else {
-        setRegError(result.error || t("auth.emailExists"));
+      const result = await register(
+        name.trim(),
+        email.trim().toLowerCase(),
+        password
+      );
+      if (!result.success) {
+        setRegisterError(result.error || t("auth.emailExists"));
+        return;
       }
+      toast.success(t("auth.registrationSuccess"));
+      closeAndReset();
     } catch {
-      setRegError(t("auth.emailExists"));
+      setRegisterError(t("auth.emailExists"));
     } finally {
-      setRegLoading(false);
+      setRegisterLoading(false);
     }
-  };
-
-  const handleForgotPassword = () => {
-    toast.info(t("auth.passwordResetComingSoon"));
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md p-0 overflow-hidden">
-        {/* Header with gold gradient */}
-        <div className="relative bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-amber-600/10 border-b border-border">
-          <DialogHeader className="p-6 pb-4">
-            <DialogTitle className="text-center text-xl font-bold">
-              {activeTab === "login" ? t("auth.welcomeBack") : t("auth.welcomeNew")}
+      <DialogContent className="overflow-hidden p-0 sm:max-w-md">
+        <div className="border-b bg-gradient-to-br from-primary/10 via-background to-primary/5 px-6 py-6">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+            {activeTab === "login" ? (
+              <KeyRound className="h-5 w-5" />
+            ) : (
+              <UserPlus className="h-5 w-5" />
+            )}
+          </div>
+          <DialogHeader>
+            <DialogTitle className="text-center text-xl">
+              {activeTab === "login"
+                ? t("auth.welcomeBack")
+                : t("auth.welcomeNew")}
             </DialogTitle>
-            <p className="text-center text-sm text-muted-foreground mt-1">
+            <p className="text-center text-sm text-muted-foreground">
               {activeTab === "login" ? t("auth.loginDesc") : t("auth.registerDesc")}
             </p>
           </DialogHeader>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "login" | "register")} className="w-full">
-          <div className="px-6 pt-2">
-            <TabsList className="w-full grid grid-cols-2">
-              <TabsTrigger value="login" className="gap-1.5 text-sm">
-                <KeyRound className="w-3.5 h-3.5" />
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) =>
+            setActiveTab(value === "register" ? "register" : "login")
+          }
+        >
+          <div className="px-6 pt-5">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="login" className="gap-2">
+                <KeyRound className="h-4 w-4" />
                 {t("auth.login")}
               </TabsTrigger>
-              <TabsTrigger value="register" className="gap-1.5 text-sm">
-                <UserPlus className="w-3.5 h-3.5" />
+              <TabsTrigger value="register" className="gap-2">
+                <UserPlus className="h-4 w-4" />
                 {t("auth.register")}
               </TabsTrigger>
             </TabsList>
           </div>
 
-          {/* Login Tab */}
-          <TabsContent value="login" className="mt-0 px-6 pb-6 pt-4">
+          <TabsContent value="login" className="m-0 px-6 pb-6 pt-5">
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="login-email" className="text-sm font-medium">
-                  {t("auth.email")}
-                </Label>
+                <Label htmlFor="login-email">{t("auth.email")}</Label>
                 <div className="relative">
-                  <Mail className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Mail className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="login-email"
                     type="email"
-                    placeholder="name@example.com"
                     value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
+                    onChange={(event) => setLoginEmail(event.target.value)}
                     className="ps-9"
-                    required
                     autoComplete="email"
+                    required
                   />
                 </div>
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="login-password" className="text-sm font-medium">
-                  {t("auth.password")}
-                </Label>
+                <Label htmlFor="login-password">{t("auth.password")}</Label>
                 <div className="relative">
-                  <Lock className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Lock className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="login-password"
                     type="password"
-                    placeholder="••••••••"
                     value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
+                    onChange={(event) => setLoginPassword(event.target.value)}
                     className="ps-9"
-                    required
                     autoComplete="current-password"
+                    required
                   />
                 </div>
               </div>
-
-              {loginError && (
-                <div className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+              {loginError ? (
+                <div className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {loginError}
                 </div>
-              )}
-
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                className="text-xs text-muted-foreground hover:text-primary transition-colors"
-              >
-                {t("auth.forgotPassword")}
-              </button>
-
-              <Button
-                type="submit"
-                className="w-full bg-[var(--gold)] hover:bg-[var(--gold)]/90 text-[var(--gold-foreground)] gap-2"
-                disabled={loginLoading}
-              >
-                {loginLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {t("common.loading")}
-                  </>
-                ) : (
-                  t("auth.signInButton")
-                )}
+              ) : null}
+              <Button className="w-full gap-2" disabled={loginLoading}>
+                {loginLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {t("auth.signInButton")}
               </Button>
-
               <p className="text-center text-xs text-muted-foreground">
                 {t("auth.noAccount")}{" "}
                 <button
                   type="button"
                   onClick={() => setActiveTab("register")}
-                  className="text-primary hover:underline font-medium"
+                  className="font-medium text-primary hover:underline"
                 >
                   {t("auth.signUp")}
                 </button>
@@ -215,114 +227,82 @@ export function AuthDialog({ open, onOpenChange, defaultTab = "login" }: AuthDia
             </form>
           </TabsContent>
 
-          {/* Register Tab */}
-          <TabsContent value="register" className="mt-0 px-6 pb-6 pt-4">
+          <TabsContent value="register" className="m-0 px-6 pb-6 pt-5">
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="reg-name" className="text-sm font-medium">
-                  {t("auth.name")}
-                </Label>
+                <Label htmlFor="register-name">{t("auth.name")}</Label>
                 <div className="relative">
-                  <User className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <User className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    id="reg-name"
-                    type="text"
-                    placeholder={t("auth.namePlaceholder")}
-                    value={regName}
-                    onChange={(e) => setRegName(e.target.value)}
+                    id="register-name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
                     className="ps-9"
-                    required
                     autoComplete="name"
+                    minLength={2}
+                    maxLength={120}
+                    required
                   />
                 </div>
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="reg-email" className="text-sm font-medium">
-                  {t("auth.email")}
-                </Label>
+                <Label htmlFor="register-email">{t("auth.email")}</Label>
                 <div className="relative">
-                  <Mail className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Mail className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    id="reg-email"
+                    id="register-email"
                     type="email"
-                    placeholder="name@example.com"
-                    value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
                     className="ps-9"
-                    required
                     autoComplete="email"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="reg-password" className="text-sm font-medium">
-                  {t("auth.password")}
-                </Label>
-                <div className="relative">
-                  <Lock className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="reg-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    className="ps-9"
                     required
-                    minLength={6}
-                    autoComplete="new-password"
                   />
                 </div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="reg-confirm" className="text-sm font-medium">
-                  {t("auth.confirmPassword")}
-                </Label>
-                <div className="relative">
-                  <Lock className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="register-password">{t("auth.password")}</Label>
                   <Input
-                    id="reg-confirm"
+                    id="register-password"
                     type="password"
-                    placeholder="••••••••"
-                    value={regConfirmPassword}
-                    onChange={(e) => setRegConfirmPassword(e.target.value)}
-                    className="ps-9"
-                    required
-                    minLength={6}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
                     autoComplete="new-password"
+                    minLength={8}
+                    maxLength={128}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="register-confirm">{t("auth.confirmPassword")}</Label>
+                  <Input
+                    id="register-confirm"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    autoComplete="new-password"
+                    minLength={8}
+                    maxLength={128}
+                    required
                   />
                 </div>
               </div>
-
-              {regError && (
-                <div className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
-                  {regError}
+              {registerError ? (
+                <div className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {registerError}
                 </div>
-              )}
-
-              <Button
-                type="submit"
-                className="w-full bg-[var(--gold)] hover:bg-[var(--gold)]/90 text-[var(--gold-foreground)] gap-2"
-                disabled={regLoading}
-              >
-                {regLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {t("common.loading")}
-                  </>
-                ) : (
-                  t("auth.signUpButton")
-                )}
+              ) : null}
+              <Button className="w-full gap-2" disabled={registerLoading}>
+                {registerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {t("auth.signUpButton")}
               </Button>
-
               <p className="text-center text-xs text-muted-foreground">
                 {t("auth.hasAccount")}{" "}
                 <button
                   type="button"
                   onClick={() => setActiveTab("login")}
-                  className="text-primary hover:underline font-medium"
+                  className="font-medium text-primary hover:underline"
                 >
                   {t("auth.signIn")}
                 </button>
