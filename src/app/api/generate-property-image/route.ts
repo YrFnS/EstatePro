@@ -36,9 +36,9 @@ export async function POST(request: NextRequest) {
     if (imageData?.url) {
       return NextResponse.json({ imageUrl: imageData.url });
     }
-    if (imageData?.b64_json) {
+    if (imageData?.base64) {
       return NextResponse.json({
-        imageUrl: `data:image/png;base64,${imageData.b64_json}`,
+        imageUrl: `data:image/png;base64,${imageData.base64}`,
       });
     }
 
