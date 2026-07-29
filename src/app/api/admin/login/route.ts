@@ -1,43 +1,68 @@
+import { createHash } from "node:crypto";
+import bcrypt from "bcryptjs";
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
+import { db } from "@/lib/db";
+import {
+  ADMIN_NONCE_COOKIE,
+  ADMIN_SESSION_COOKIE,
+  adminCookieOptions,
+  createAdminSession,
+} from "@/lib/admin-auth";
 
-function hashPassword(password: string): string {
-  return crypto.createHash("sha256").update(password).digest("hex");
+function legacyHash(password: string): string {
+  return createHash("sha256").update(password).digest("hex");
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password } = body;
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const password = typeof body.password === "string" ? body.password : "";
 
-    if (!email || !password) {
+    if (!email || !password || email.length > 320 || password.length > 256) {
       return NextResponse.json(
         { error: "Email and password are required" },
         { status: 400 }
       );
     }
 
-    const { db } = await import("@/lib/db");
-
-    const hashedPassword = hashPassword(password);
-    const user = await db.user.findFirst({
-      where: {
-        email,
-        password: hashedPassword,
-        role: "admin",
-      },
-    });
-
-    if (!user) {
+    const user = await db.user.findUnique({ where: { email } });
+    if (!user || user.role !== "admin") {
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
       );
     }
 
-    // Create a simple token: base64(userId:email:role)
-    const token = Buffer.from(`${user.id}:${user.email}:${user.role}`).toString("base64");
+    let passwordMatches = false;
+    let usedLegacyHash = false;
 
+    try {
+      passwordMatches = await bcrypt.compare(password, user.password);
+    } catch {
+      passwordMatches = false;
+    }
+
+    if (!passwordMatches && legacyHash(password) === user.password) {
+      passwordMatches = true;
+      usedLegacyHash = true;
+    }
+
+    if (!passwordMatches) {
+      return NextResponse.json(
+        { error: "Invalid email or password" },
+        { status: 401 }
+      );
+    }
+
+    if (usedLegacyHash) {
+      await db.user.update({
+        where: { id: user.id },
+        data: { password: await bcrypt.hash(password, 12) },
+      });
+    }
+
+    const session = createAdminSession({ userId: user.id, email: user.email });
     const response = NextResponse.json({
       user: {
         id: user.id,
@@ -47,20 +72,20 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    response.cookies.set("admin_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24, // 24 hours
-    });
+    response.cookies.set(
+      ADMIN_SESSION_COOKIE,
+      session.token,
+      adminCookieOptions(true)
+    );
+    response.cookies.set(
+      ADMIN_NONCE_COOKIE,
+      session.nonce,
+      adminCookieOptions(false)
+    );
 
     return response;
   } catch (error) {
-    console.error("Login error:", error);
-    return NextResponse.json(
-      { error: "Login failed" },
-      { status: 500 }
-    );
+    console.error("Admin login error:", error);
+    return NextResponse.json({ error: "Login failed" }, { status: 500 });
   }
 }
