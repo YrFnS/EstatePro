@@ -1,30 +1,31 @@
 "use client";
 
-import { useI18n } from "@/lib/i18n/provider";
-import { useRouter } from "@/lib/router";
-import { useState, useEffect, useRef, useCallback } from "react";
-import { io, Socket } from "socket.io-client";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { io, type Socket } from "socket.io-client";
 import {
-  MessageCircle,
-  Send,
-  Search,
   ArrowLeft,
   Check,
   CheckCheck,
-  Loader2,
-  MessageSquare,
   Home,
+  Loader2,
+  MessageCircle,
+  MessageSquare,
+  Search,
+  Send,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
+import { useI18n } from "@/lib/i18n/provider";
+import { useRouter } from "@/lib/router";
+import { cn } from "@/lib/utils";
+import { AuthDialog } from "@/components/real-estate/auth-dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 
-// Types
 interface ConversationUser {
   id: string;
   name: string;
@@ -33,29 +34,11 @@ interface ConversationUser {
   role: string;
 }
 
-interface ConversationParticipant {
+interface Participant {
   id: string;
   userId: string;
   joinedAt: string;
   user: ConversationUser;
-}
-
-interface LastMessage {
-  id: string;
-  senderId: string;
-  content: string;
-  createdAt: string;
-  read: boolean;
-}
-
-interface Conversation {
-  id: string;
-  propertyId: string | null;
-  createdAt: string;
-  updatedAt: string;
-  participants: ConversationParticipant[];
-  lastMessage: LastMessage | null;
-  unreadCount: number;
 }
 
 interface Message {
@@ -68,43 +51,60 @@ interface Message {
   sender?: ConversationUser;
 }
 
-// Demo user ID (since we don't have auth, use a stored ID)
-function getCurrentUserId(): string {
-  if (typeof window === "undefined") return "demo-user";
-  let userId = localStorage.getItem("estatepro-user-id");
-  if (!userId) {
-    userId = `user-${Date.now()}`;
-    localStorage.setItem("estatepro-user-id", userId);
-  }
-  return userId;
+interface Conversation {
+  id: string;
+  propertyId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  participants: Participant[];
+  lastMessage: Message | null;
+  unreadCount: number;
 }
 
-function getCurrentUserName(): string {
-  if (typeof window === "undefined") return "Guest";
-  return localStorage.getItem("estatepro-user-name") || "Guest";
+function normalizeConversation(value: any): Conversation {
+  return {
+    id: value.id,
+    propertyId: value.propertyId || null,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+    participants: Array.isArray(value.participants) ? value.participants : [],
+    lastMessage:
+      value.lastMessage ||
+      (Array.isArray(value.messages) && value.messages.length
+        ? value.messages[0]
+        : null),
+    unreadCount: Number(value.unreadCount || 0),
+  };
 }
 
-function formatTime(dateStr: string, locale: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
+function initials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
 
-  if (diffMins < 1) return t("messaging.now");
-  if (diffMins < 60) return `${diffMins}m`;
-  if (diffHours < 24) return `${diffHours}h`;
-  if (diffDays < 7) return `${diffDays}d`;
-  return date.toLocaleDateString(locale === "ar" ? "ar-SA" : "en-US", {
+function relativeTime(value: string, locale: string, nowLabel: string) {
+  const elapsed = Date.now() - new Date(value).getTime();
+  const minutes = Math.floor(elapsed / 60_000);
+  const hours = Math.floor(elapsed / 3_600_000);
+  const days = Math.floor(elapsed / 86_400_000);
+
+  if (!Number.isFinite(elapsed) || minutes < 1) return nowLabel;
+  if (minutes < 60) return `${minutes}m`;
+  if (hours < 24) return `${hours}h`;
+  if (days < 7) return `${days}d`;
+  return new Date(value).toLocaleDateString(locale === "ar" ? "ar-IQ" : "en-US", {
     month: "short",
     day: "numeric",
   });
 }
 
-function formatMessageTime(dateStr: string, locale: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleTimeString(locale === "ar" ? "ar-SA" : "en-US", {
+function messageTime(value: string, locale: string) {
+  return new Date(value).toLocaleTimeString(locale === "ar" ? "ar-IQ" : "en-US", {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -113,605 +113,482 @@ function formatMessageTime(dateStr: string, locale: string): string {
 export function MessagingPage() {
   const { t, locale, dir } = useI18n();
   const { params, navigate } = useRouter();
-
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [selected, setSelected] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [messageInput, setMessageInput] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [search, setSearch] = useState("");
+  const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
-  const [loadingMessages, setLoadingMessages] = useState(false);
-  const [sendingMessage, setSendingMessage] = useState(false);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
   const [typingUser, setTypingUser] = useState<{ userId: string; userName: string } | null>(null);
-  const [showMobileChat, setShowMobileChat] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState("demo-user");
-  const [currentUserName, setCurrentUserName] = useState("Guest");
-
   const socketRef = useRef<Socket | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startedRef = useRef("");
+  const userId = user?.id || "";
 
-  // Initialize user ID
-  useEffect(() => {
-    setCurrentUserId(getCurrentUserId());
-    setCurrentUserName(getCurrentUserName());
-  }, []);
+  const otherUser = useCallback(
+    (conversation: Conversation) =>
+      conversation.participants.find((participant) => participant.userId !== userId)?.user || null,
+    [userId]
+  );
 
-  // Initialize Socket.IO
-  useEffect(() => {
-    const socket = io({
-      transports: ["websocket", "polling"],
-    });
-
-    socket.on("connect", () => {
-      console.log("Socket connected:", socket.id);
-    });
-
-    socket.on("new-message", (message: Message) => {
-      setMessages((prev) => {
-        // Avoid duplicates
-        if (prev.some((m) => m.id === message.id)) return prev;
-        return [...prev, message];
-      });
-      // Refresh conversations list
-      fetchConversations();
-    });
-
-    socket.on("user-typing", (data: { userId: string; userName: string; isTyping: boolean }) => {
-      if (data.isTyping) {
-        setTypingUser({ userId: data.userId, userName: data.userName });
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = setTimeout(() => setTypingUser(null), 3000);
-      } else {
-        setTypingUser(null);
-      }
-    });
-
-    socket.on("messages-read", (data: { userId: string; messageIds: string[] }) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          data.messageIds.includes(m.id) ? { ...m, read: true } : m
-        )
-      );
-    });
-
-    socketRef.current = socket;
-
-    return () => {
-      socket.disconnect();
-    };
-  }, []);
-
-  // Join conversation room when selected
-  useEffect(() => {
-    if (selectedConversation && socketRef.current) {
-      socketRef.current.emit("join-conversation", selectedConversation.id);
-      return () => {
-        socketRef.current?.emit("leave-conversation", selectedConversation.id);
-      };
-    }
-  }, [selectedConversation]);
-
-  // Auto-scroll to bottom on new messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // Fetch conversations
-  const fetchConversations = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/conversations?userId=${currentUserId}`);
-      const data = await res.json();
-      setConversations(data.conversations || []);
-    } catch {
+  const loadConversations = useCallback(async () => {
+    if (!isAuthenticated) {
       setConversations([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/conversations", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to load conversations");
+      const next = (payload.conversations || []).map(normalizeConversation);
+      setConversations(next);
+      setSelected((current) =>
+        current ? next.find((item: Conversation) => item.id === current.id) || current : null
+      );
+    } catch (error) {
+      console.error(error);
+      setConversations([]);
+      toast.error(locale === "ar" ? "تعذر تحميل المحادثات" : "Failed to load conversations");
     } finally {
       setLoading(false);
     }
-  }, [currentUserId]);
+  }, [isAuthenticated, locale]);
 
-  useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
-
-  // Check for agentId/propertyId params to start a conversation
-  useEffect(() => {
-    const startConversationWithAgent = async () => {
-      const agentId = params.agentId;
-      const propertyId = params.propertyId;
-
-      if (!agentId) return;
-
+  const loadThread = useCallback(
+    async (conversationId: string) => {
+      setThreadLoading(true);
       try {
-        // Create or get conversation
-        const res = await fetch("/api/conversations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            participantIds: [currentUserId, agentId],
-            propertyId: propertyId || null,
-          }),
+        const response = await fetch(`/api/conversations/${conversationId}`, {
+          cache: "no-store",
         });
-        const data = await res.json();
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Failed to load messages");
 
-        if (data.conversation) {
-          setSelectedConversation(data.conversation);
-          setShowMobileChat(true);
-          // Fetch messages for this conversation
-          fetchMessages(data.conversation.id);
-          // Refresh list
-          fetchConversations();
+        const nextMessages: Message[] = payload.conversation?.messages || [];
+        setMessages(nextMessages);
+        const unreadIds = nextMessages
+          .filter((message) => message.senderId !== userId && !message.read)
+          .map((message) => message.id);
 
-          if (!data.existed) {
-            toast.success(
-              t("messaging.newConversationCreated")
+        if (unreadIds.length) {
+          const markResponse = await fetch(`/api/conversations/${conversationId}/messages`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messageIds: unreadIds }),
+          });
+          if (markResponse.ok) {
+            setMessages((current) =>
+              current.map((message) =>
+                unreadIds.includes(message.id) ? { ...message, read: true } : message
+              )
             );
+            socketRef.current?.emit("mark-read", { conversationId, messageIds: unreadIds });
+            loadConversations();
           }
         }
-      } catch {
-        toast.error(
-          t("messaging.failedCreateConversation")
-        );
+      } catch (error) {
+        console.error(error);
+        setMessages([]);
+        toast.error(locale === "ar" ? "تعذر تحميل الرسائل" : "Failed to load messages");
+      } finally {
+        setThreadLoading(false);
+      }
+    },
+    [loadConversations, locale, userId]
+  );
+
+  useEffect(() => {
+    if (!authLoading) loadConversations();
+  }, [authLoading, loadConversations]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const socket = io({ transports: ["websocket", "polling"], withCredentials: true });
+    socket.on("new-message", (message: Message) => {
+      setMessages((current) =>
+        current.some((item) => item.id === message.id) ? current : [...current, message]
+      );
+      loadConversations();
+    });
+    socket.on("user-typing", (data: { userId: string; userName: string; isTyping: boolean }) => {
+      if (!data.isTyping) {
+        setTypingUser(null);
+        return;
+      }
+      setTypingUser({ userId: data.userId, userName: data.userName });
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = setTimeout(() => setTypingUser(null), 3_000);
+    });
+    socket.on("messages-read", (data: { messageIds: string[] }) => {
+      if (!data.messageIds?.length) return;
+      setMessages((current) =>
+        current.map((message) =>
+          data.messageIds.includes(message.id) ? { ...message, read: true } : message
+        )
+      );
+    });
+    socket.on("socket-error", (data: { message?: string }) => {
+      if (data?.message) toast.error(data.message);
+    });
+
+    socketRef.current = socket;
+    return () => {
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [isAuthenticated, loadConversations]);
+
+  useEffect(() => {
+    if (!selected || !socketRef.current) return;
+    const conversationId = selected.id;
+    socketRef.current.emit("join-conversation", conversationId);
+    return () => {
+      socketRef.current?.emit("leave-conversation", conversationId);
+    };
+  }, [selected]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    const agentId = params.agentId;
+    if (!isAuthenticated || !agentId) return;
+
+    const key = `${agentId}:${params.propertyId || ""}`;
+    if (startedRef.current === key) return;
+    startedRef.current = key;
+
+    const startConversation = async () => {
+      try {
+        const response = await fetch("/api/conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agentId, propertyId: params.propertyId || null }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Failed to start conversation");
+
+        const conversation = normalizeConversation(payload.conversation);
+        setSelected(conversation);
+        setMobileThreadOpen(true);
+        await loadThread(conversation.id);
+        await loadConversations();
+        if (!payload.existed) toast.success(t("messaging.newConversationCreated"));
+      } catch (error) {
+        startedRef.current = "";
+        toast.error(error instanceof Error ? error.message : t("messaging.failedCreateConversation"));
       }
     };
 
-    if (currentUserId !== "demo-user" || params.agentId) {
-      startConversationWithAgent();
-    }
-  }, [params.agentId, params.propertyId, currentUserId, locale]);
+    startConversation();
+  }, [isAuthenticated, loadConversations, loadThread, params.agentId, params.propertyId, t]);
 
-  // Fetch messages for a conversation
-  const fetchMessages = async (conversationId: string) => {
-    setLoadingMessages(true);
+  const selectConversation = useCallback(
+    (conversation: Conversation) => {
+      setSelected(conversation);
+      setMobileThreadOpen(true);
+      loadThread(conversation.id);
+    },
+    [loadThread]
+  );
+
+  const emitTyping = useCallback(
+    (isTyping: boolean) => {
+      if (!selected) return;
+      socketRef.current?.emit("typing", { conversationId: selected.id, isTyping });
+    },
+    [selected]
+  );
+
+  const sendMessage = useCallback(async () => {
+    const content = draft.trim();
+    if (!content || !selected || sending) return;
+
+    setDraft("");
+    setSending(true);
     try {
-      const res = await fetch(`/api/conversations/${conversationId}`);
-      const data = await res.json();
-      if (data.conversation) {
-        setMessages(data.conversation.messages || []);
-        // Mark as read
-        await fetch(`/api/conversations/${conversationId}/messages`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: currentUserId }),
-        });
-      }
-    } catch {
-      setMessages([]);
-    } finally {
-      setLoadingMessages(false);
-    }
-  };
+      const response = await fetch(`/api/conversations/${selected.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to send message");
 
-  // Handle selecting a conversation
-  const handleSelectConversation = (conversation: Conversation) => {
-    setSelectedConversation(conversation);
-    setShowMobileChat(true);
-    fetchMessages(conversation.id);
-  };
-
-  // Handle sending a message
-  const handleSendMessage = async () => {
-    if (!messageInput.trim() || !selectedConversation) return;
-
-    const content = messageInput.trim();
-    setMessageInput("");
-    setSendingMessage(true);
-
-    try {
-      // Save to DB
-      const res = await fetch(
-        `/api/conversations/${selectedConversation.id}/messages`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            senderId: currentUserId,
-            content,
-          }),
-        }
+      const message = payload.message as Message;
+      setMessages((current) =>
+        current.some((item) => item.id === message.id) ? current : [...current, message]
       );
-      const data = await res.json();
-
-      if (data.message) {
-        // Emit via socket for real-time
-        socketRef.current?.emit("send-message", {
-          conversationId: selectedConversation.id,
-          senderId: currentUserId,
-          content,
-          message: data.message,
-        });
-
-        // Add to local messages
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === data.message.id)) return prev;
-          return [...prev, data.message];
-        });
-
-        // Refresh conversations
-        fetchConversations();
-      }
-    } catch {
-      toast.error(
-        t("messaging.failedSendMessage")
-      );
+      socketRef.current?.emit("send-message", {
+        conversationId: selected.id,
+        message: { id: message.id },
+      });
+      loadConversations();
+    } catch (error) {
+      setDraft(content);
+      toast.error(error instanceof Error ? error.message : t("messaging.failedSendMessage"));
     } finally {
-      setSendingMessage(false);
+      setSending(false);
     }
-  };
+  }, [draft, loadConversations, selected, sending, t]);
 
-  // Handle typing indicator
-  const handleTyping = (isTyping: boolean) => {
-    if (!selectedConversation || !socketRef.current) return;
-    socketRef.current.emit("typing", {
-      conversationId: selectedConversation.id,
-      userId: currentUserId,
-      userName: currentUserName,
-      isTyping,
-    });
-  };
-
-  // Get other participant in a conversation
-  const getOtherParticipant = (conversation: Conversation): ConversationUser | null => {
-    const other = conversation.participants.find(
-      (p) => p.userId !== currentUserId
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return conversations;
+    return conversations.filter((conversation) =>
+      otherUser(conversation)?.name.toLowerCase().includes(query)
     );
-    return other?.user || null;
-  };
+  }, [conversations, otherUser, search]);
 
-  // Filter conversations by search
-  const filteredConversations = conversations.filter((conv) => {
-    if (!searchQuery) return true;
-    const other = getOtherParticipant(conv);
-    if (!other) return false;
-    return other.name.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const activeOtherUser = selected ? otherUser(selected) : null;
 
-  // Get initials for avatar
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  const otherParticipant = selectedConversation
-    ? getOtherParticipant(selectedConversation)
-    : null;
-
-  // Loading state
-  if (loading) {
+  if (authLoading || loading) {
     return (
-      <div className="py-8 md:py-12">
-        <div className="container mx-auto px-4">
-          <Skeleton className="h-8 w-48 mb-6" />
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Skeleton className="h-[600px] rounded-xl" />
-            <Skeleton className="h-[600px] lg:col-span-2 rounded-xl" />
-          </div>
+      <div className="container mx-auto px-4 py-10">
+        <Skeleton className="mb-6 h-10 w-56" />
+        <div className="grid gap-6 lg:grid-cols-[minmax(280px,360px)_1fr]">
+          <Skeleton className="h-[640px] rounded-2xl" />
+          <Skeleton className="h-[640px] rounded-2xl" />
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="py-8 md:py-12" dir={dir}>
-      <div className="container mx-auto px-4">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <MessageCircle className="w-7 h-7 text-primary" />
-          <h1 className="text-2xl md:text-3xl font-bold">{t("messaging.title")}</h1>
-        </div>
-
-        {/* Main Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 lg:gap-6 rounded-xl overflow-hidden lg:overflow-visible border border-border lg:border-0">
-          {/* Conversation List */}
-          <div
-            className={cn(
-              "lg:border lg:rounded-xl lg:bg-card",
-              showMobileChat ? "hidden lg:block" : "block"
-            )}
-          >
-            {/* Search */}
-            <div className="p-4 border-b">
-              <div className="relative">
-                <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t("messaging.searchConversations")}
-                  className="ps-9"
-                />
-              </div>
+  if (!isAuthenticated || !user) {
+    return (
+      <div className="container mx-auto flex min-h-[60vh] items-center justify-center px-4 py-12">
+        <Card className="w-full max-w-lg rounded-3xl text-center">
+          <CardContent className="p-10">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <MessageCircle className="h-7 w-7" />
             </div>
+            <h1 className="text-2xl font-bold">{t("messaging.title")}</h1>
+            <p className="mt-3 text-muted-foreground">
+              {locale === "ar"
+                ? "سجّل الدخول لعرض رسائلك والتواصل بأمان مع الوكلاء."
+                : "Sign in to view your messages and securely contact agents."}
+            </p>
+            <Button className="mt-6" onClick={() => setAuthDialogOpen(true)}>
+              {t("auth.signIn")}
+            </Button>
+          </CardContent>
+        </Card>
+        <AuthDialog open={authDialogOpen} onOpenChange={setAuthDialogOpen} />
+      </div>
+    );
+  }
 
-            {/* Conversation Items */}
-            <div className="max-h-[600px] overflow-y-auto">
-              {filteredConversations.length === 0 ? (
-                <div className="p-8 text-center">
-                  <MessageSquare className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
-                  <h3 className="font-semibold mb-1">
-                    {t("messaging.noConversations")}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {t("messaging.noConversationsDesc")}
-                  </p>
-                  <Button
-                    className="mt-4 btn-gold gap-2"
-                    onClick={() => navigate("agents")}
-                  >
-                    <Home className="w-4 h-4" />
-                    {t("messaging.browseAgents")}
-                  </Button>
-                </div>
-              ) : (
-                filteredConversations.map((conv) => {
-                  const other = getOtherParticipant(conv);
-                  const isSelected = selectedConversation?.id === conv.id;
+  return (
+    <div className="container mx-auto px-4 py-8 md:py-12" dir={dir}>
+      <div className="mb-6 flex items-end justify-between gap-4">
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
+            <MessageCircle className="h-4 w-4" />
+            {t("common.appName")}
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight">{t("messaging.title")}</h1>
+        </div>
+        <Button variant="outline" onClick={() => navigate("agents")} className="gap-2">
+          <Home className="h-4 w-4" />
+          <span className="hidden sm:inline">{t("messaging.browseAgents")}</span>
+        </Button>
+      </div>
 
-                  return (
-                    <button
-                      key={conv.id}
-                      onClick={() => handleSelectConversation(conv)}
-                      className={cn(
-                        "w-full flex items-center gap-3 p-4 text-start transition-colors hover:bg-accent/50 border-b border-border/50",
-                        isSelected && "bg-accent/50"
-                      )}
-                    >
-                      <Avatar className="w-11 h-11 shrink-0">
-                        <AvatarImage
-                          src={
-                            other?.avatar ||
-                            `https://placehold.co/80x80/e2e8f0/64748b?text=${encodeURIComponent(
-                              other?.name?.[0] || "?"
-                            )}`
-                          }
-                        />
-                        <AvatarFallback>
-                          {other ? getInitials(other.name) : "?"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium text-sm truncate">
-                            {other?.name || "Unknown"}
-                          </span>
-                          {conv.lastMessage && (
-                            <span className="text-xs text-muted-foreground shrink-0">
-                              {formatTime(conv.lastMessage.createdAt, locale)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs text-muted-foreground truncate">
-                            {conv.lastMessage
-                              ? conv.lastMessage.content
-                              : t("messaging.noMessages")}
-                          </p>
-                          {conv.unreadCount > 0 && (
-                            <Badge className="bg-primary text-primary-foreground text-[10px] px-1.5 py-0 h-5 min-w-[20px] flex items-center justify-center shrink-0">
-                              {conv.unreadCount}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
+      <div className="grid min-h-[660px] overflow-hidden rounded-2xl border bg-card shadow-sm lg:grid-cols-[340px_1fr]">
+        <aside className={cn("border-e bg-background", mobileThreadOpen ? "hidden lg:block" : "block")}>
+          <div className="border-b p-4">
+            <div className="relative">
+              <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={t("messaging.searchConversations")}
+                className="ps-9"
+              />
             </div>
           </div>
 
-          {/* Chat Panel */}
-          <div
-            className={cn(
-              "lg:col-span-2 lg:border lg:rounded-xl lg:bg-card flex flex-col",
-              showMobileChat ? "block" : "hidden lg:flex"
-            )}
-            style={{ height: "660px" }}
-          >
-            {selectedConversation && otherParticipant ? (
-              <>
-                {/* Chat Header */}
-                <div className="flex items-center gap-3 p-4 border-b">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="lg:hidden h-8 w-8"
-                    onClick={() => setShowMobileChat(false)}
+          <div className="max-h-[600px] overflow-y-auto">
+            {!filtered.length ? (
+              <div className="p-8 text-center">
+                <MessageSquare className="mx-auto mb-3 h-11 w-11 text-muted-foreground/40" />
+                <h2 className="font-semibold">{t("messaging.noConversations")}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{t("messaging.noConversationsDesc")}</p>
+              </div>
+            ) : (
+              filtered.map((conversation) => {
+                const other = otherUser(conversation);
+                const active = selected?.id === conversation.id;
+                return (
+                  <button
+                    type="button"
+                    key={conversation.id}
+                    onClick={() => selectConversation(conversation)}
+                    className={cn(
+                      "flex w-full items-center gap-3 border-b p-4 text-start transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
+                      active && "bg-primary/5"
+                    )}
                   >
-                    <ArrowLeft className="w-4 h-4" />
-                  </Button>
-                  <Avatar className="w-9 h-9">
-                    <AvatarImage
-                      src={
-                        otherParticipant.avatar ||
-                        `https://placehold.co/80x80/e2e8f0/64748b?text=${encodeURIComponent(
-                          otherParticipant.name?.[0] || "?"
-                        )}`
-                      }
-                    />
-                    <AvatarFallback>
-                      {getInitials(otherParticipant.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-sm">
-                      {otherParticipant.name}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      {typingUser && typingUser.userId !== currentUserId
-                        ? `${typingUser.userName} ${t("messaging.typing")}`
-                        : otherParticipant.role === "agent"
-                        ? t("messaging.online")
-                        : t("messaging.offline")}
-                    </p>
-                  </div>
-                </div>
+                    <Avatar className="h-11 w-11 shrink-0">
+                      {other?.avatar ? <AvatarImage src={other.avatar} alt={other.name} /> : null}
+                      <AvatarFallback>{initials(other?.name || "?")}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-semibold">
+                          {other?.name || (locale === "ar" ? "مستخدم" : "User")}
+                        </span>
+                        {conversation.lastMessage ? (
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {relativeTime(conversation.lastMessage.createdAt, locale, t("messaging.now"))}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <span className="truncate text-xs text-muted-foreground">
+                          {conversation.lastMessage?.content || t("messaging.noMessages")}
+                        </span>
+                        {conversation.unreadCount > 0 ? (
+                          <Badge className="h-5 min-w-5 justify-center rounded-full px-1.5 text-[10px]">
+                            {conversation.unreadCount}
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </aside>
 
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {loadingMessages ? (
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center py-8">
-                      <MessageCircle className="w-12 h-12 text-muted-foreground/40 mb-3" />
-                      <p className="text-sm text-muted-foreground">
-                        {t("messaging.noMessages")}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {t("messaging.startConversation")}
-                      </p>
-                    </div>
-                  ) : (
-                    messages.map((msg) => {
-                      const isOwn = msg.senderId === currentUserId;
-                      return (
+        <section className={cn("min-w-0 flex-col bg-card", mobileThreadOpen ? "flex" : "hidden lg:flex")}>
+          {selected && activeOtherUser ? (
+            <>
+              <header className="flex items-center gap-3 border-b p-4">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="lg:hidden"
+                  onClick={() => setMobileThreadOpen(false)}
+                  aria-label={t("common.back")}
+                >
+                  <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
+                </Button>
+                <Avatar className="h-10 w-10">
+                  {activeOtherUser.avatar ? (
+                    <AvatarImage src={activeOtherUser.avatar} alt={activeOtherUser.name} />
+                  ) : null}
+                  <AvatarFallback>{initials(activeOtherUser.name)}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-sm font-semibold">{activeOtherUser.name}</h2>
+                  <p className="text-xs text-muted-foreground">
+                    {typingUser && typingUser.userId !== userId
+                      ? `${typingUser.userName} ${t("messaging.typing")}`
+                      : activeOtherUser.role === "agent"
+                        ? locale === "ar" ? "وكيل عقاري" : "Real estate agent"
+                        : t("messaging.online")}
+                  </p>
+                </div>
+              </header>
+
+              <div className="flex-1 space-y-3 overflow-y-auto p-4 md:p-6">
+                {threadLoading ? (
+                  <div className="flex h-full items-center justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : !messages.length ? (
+                  <div className="flex h-full flex-col items-center justify-center text-center">
+                    <MessageCircle className="mb-3 h-12 w-12 text-muted-foreground/30" />
+                    <p className="font-medium">{t("messaging.noMessages")}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{t("messaging.startConversation")}</p>
+                  </div>
+                ) : (
+                  messages.map((message) => {
+                    const own = message.senderId === userId;
+                    return (
+                      <div key={message.id} className={cn("flex", own ? "justify-end" : "justify-start")}>
                         <div
-                          key={msg.id}
                           className={cn(
-                            "flex gap-2",
-                            isOwn ? "justify-end" : "justify-start"
+                            "max-w-[82%] rounded-2xl px-4 py-2.5 md:max-w-[70%]",
+                            own
+                              ? "rounded-ee-md bg-primary text-primary-foreground"
+                              : "rounded-es-md bg-muted"
                           )}
                         >
-                          {!isOwn && (
-                            <Avatar className="w-7 h-7 shrink-0 mt-1">
-                              <AvatarImage
-                                src={
-                                  msg.sender?.avatar ||
-                                  `https://placehold.co/80x80/e2e8f0/64748b?text=${encodeURIComponent(
-                                    msg.sender?.name?.[0] || "?"
-                                  )}`
-                                }
-                              />
-                              <AvatarFallback className="text-[10px]">
-                                {msg.sender
-                                  ? getInitials(msg.sender.name)
-                                  : "?"}
-                              </AvatarFallback>
-                            </Avatar>
-                          )}
+                          <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
                           <div
                             className={cn(
-                              "max-w-[70%] rounded-2xl px-4 py-2.5",
-                              isOwn
-                                ? "bg-primary text-primary-foreground rounded-ee-sm"
-                                : "bg-muted rounded-es-sm"
+                              "mt-1 flex items-center gap-1 text-[10px]",
+                              own ? "justify-end text-primary-foreground/65" : "text-muted-foreground"
                             )}
                           >
-                            <p className="text-sm whitespace-pre-wrap break-words">
-                              {msg.content}
-                            </p>
-                            <div
-                              className={cn(
-                                "flex items-center gap-1 mt-1",
-                                isOwn ? "justify-end" : "justify-start"
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  "text-[10px]",
-                                  isOwn
-                                    ? "text-primary-foreground/60"
-                                    : "text-muted-foreground"
-                                )}
-                              >
-                                {formatMessageTime(msg.createdAt, locale)}
-                              </span>
-                              {isOwn && (
-                                msg.read ? (
-                                  <CheckCheck className="w-3 h-3 text-primary-foreground/60" />
-                                ) : (
-                                  <Check className="w-3 h-3 text-primary-foreground/60" />
-                                )
-                              )}
-                            </div>
+                            {messageTime(message.createdAt, locale)}
+                            {own ? message.read ? <CheckCheck className="h-3 w-3" /> : <Check className="h-3 w-3" /> : null}
                           </div>
                         </div>
-                      );
-                    })
-                  )}
-
-                  {/* Typing indicator */}
-                  {typingUser && typingUser.userId !== currentUserId && (
-                    <div className="flex items-center gap-2">
-                      <Avatar className="w-7 h-7 shrink-0">
-                        <AvatarFallback className="text-[10px]">
-                          {typingUser.userName?.[0] || "?"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="bg-muted rounded-2xl px-4 py-2.5 rounded-es-sm">
-                        <div className="flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "0ms" }} />
-                          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "150ms" }} />
-                          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "300ms" }} />
-                        </div>
                       </div>
-                    </div>
-                  )}
-
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Message Input */}
-                <div className="p-4 border-t">
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }}
-                    className="flex items-center gap-2"
-                  >
-                    <Input
-                      value={messageInput}
-                      onChange={(e) => {
-                        setMessageInput(e.target.value);
-                        handleTyping(true);
-                      }}
-                      onBlur={() => handleTyping(false)}
-                      placeholder={t("messaging.typeMessage")}
-                      className="flex-1"
-                      disabled={sendingMessage}
-                    />
-                    <Button
-                      type="submit"
-                      size="icon"
-                      disabled={!messageInput.trim() || sendingMessage}
-                      className="shrink-0"
-                    >
-                      {sendingMessage ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Send className="w-4 h-4" />
-                      )}
-                    </Button>
-                  </form>
-                </div>
-              </>
-            ) : (
-              /* No conversation selected */
-              <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                <MessageCircle className="w-16 h-16 text-muted-foreground/30 mb-4" />
-                <h3 className="font-semibold text-lg mb-2">
-                  {t("messaging.title")}
-                </h3>
-                <p className="text-sm text-muted-foreground max-w-sm">
-                  {t("messaging.selectConversation")}
-                </p>
-                <Button
-                  className="mt-4 btn-gold gap-2"
-                  onClick={() => navigate("agents")}
-                >
-                  <Home className="w-4 h-4" />
-                  {t("messaging.browseAgents")}
-                </Button>
+                    );
+                  })
+                )}
+                <div ref={bottomRef} />
               </div>
-            )}
-          </div>
-        </div>
+
+              <footer className="border-t p-3 md:p-4">
+                <div className="flex items-end gap-2">
+                  <Input
+                    value={draft}
+                    onChange={(event) => {
+                      setDraft(event.target.value);
+                      emitTyping(Boolean(event.target.value));
+                    }}
+                    onBlur={() => emitTyping(false)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        emitTyping(false);
+                        sendMessage();
+                      }
+                    }}
+                    maxLength={4_000}
+                    placeholder={t("messaging.typeMessage")}
+                    disabled={sending}
+                  />
+                  <Button
+                    size="icon"
+                    onClick={() => {
+                      emitTyping(false);
+                      sendMessage();
+                    }}
+                    disabled={!draft.trim() || sending}
+                    aria-label={t("messaging.sendMessage")}
+                  >
+                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 rtl:rotate-180" />}
+                  </Button>
+                </div>
+              </footer>
+            </>
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center p-8 text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <MessageCircle className="h-8 w-8" />
+              </div>
+              <h2 className="text-xl font-semibold">{t("messaging.selectConversation")}</h2>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
