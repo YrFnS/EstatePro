@@ -1,53 +1,16 @@
 "use client";
 
-import React, { createContext, useContext, useCallback, useSyncExternalStore } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+} from "react";
+import { MAX_FAVORITES } from "@/lib/account-state";
 import { logActivity } from "@/lib/activity-log";
+import { usePersistentIdCollection } from "@/lib/use-persistent-id-collection";
 
 type FavoritesState = Set<string>;
-
-let favorites: FavoritesState = new Set<string>();
-const listeners = new Set<() => void>();
-
-// Cached server snapshot to avoid infinite loop warning
-const emptySet = new Set<string>();
-
-function notifyListeners() {
-  listeners.forEach((l) => l());
-}
-
-function subscribe(callback: () => void): () => void {
-  listeners.add(callback);
-  return () => listeners.delete(callback);
-}
-
-function getSnapshot(): FavoritesState {
-  return favorites;
-}
-
-function getServerSnapshot(): FavoritesState {
-  return emptySet;
-}
-
-function initFavorites() {
-  if (typeof window !== "undefined") {
-    try {
-      const saved = localStorage.getItem("estatepro-favorites");
-      if (saved) {
-        favorites = new Set(JSON.parse(saved));
-      }
-    } catch {
-      favorites = new Set<string>();
-    }
-  }
-}
-
-function saveFavorites() {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("estatepro-favorites", JSON.stringify([...favorites]));
-  }
-}
-
-initFavorites();
 
 interface FavoritesContextType {
   favorites: FavoritesState;
@@ -58,58 +21,95 @@ interface FavoritesContextType {
   clearFavorites: () => void;
   favoritesCount: number;
   favoritesList: string[];
+  isLoading: boolean;
 }
 
-const FavoritesContext = createContext<FavoritesContextType | undefined>(undefined);
+const FavoritesContext = createContext<FavoritesContextType | undefined>(
+  undefined
+);
 
-export function FavoritesProvider({ children }: { children: React.ReactNode }) {
-  const favSet = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+export function FavoritesProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const {
+    ids: favoritesList,
+    replaceIds,
+    isLoading,
+  } = usePersistentIdCollection({
+    endpoint: "/api/account/favorites",
+    responseKey: "favorites",
+    guestStorageKey: "estatepro-favorites",
+    accountStoragePrefix: "estatepro-favorites",
+    maxItems: MAX_FAVORITES,
+  });
 
-  const isFavorite = useCallback((id: string) => favSet.has(id), [favSet]);
+  const favorites = useMemo(
+    () => new Set(favoritesList),
+    [favoritesList]
+  );
 
-  const toggleFavorite = useCallback((id: string) => {
-    const wasFavorite = favorites.has(id);
-    if (wasFavorite) {
-      favorites = new Set([...favorites].filter((f) => f !== id));
-      logActivity("favorite", `Removed property from favorites`);
-    } else {
-      favorites = new Set([...favorites, id]);
-      logActivity("favorite", `Added property to favorites`);
-    }
-    saveFavorites();
-    notifyListeners();
-    return favorites.has(id);
-  }, []);
+  const isFavorite = useCallback(
+    (id: string) => favorites.has(id),
+    [favorites]
+  );
 
-  const addFavorite = useCallback((id: string) => {
-    favorites = new Set([...favorites, id]);
-    saveFavorites();
-    notifyListeners();
-  }, []);
+  const toggleFavorite = useCallback(
+    (id: string) => {
+      const wasFavorite = favorites.has(id);
+      const next = wasFavorite
+        ? favoritesList.filter((favoriteId) => favoriteId !== id)
+        : [id, ...favoritesList];
 
-  const removeFavorite = useCallback((id: string) => {
-    favorites = new Set([...favorites].filter((f) => f !== id));
-    saveFavorites();
-    notifyListeners();
-  }, []);
+      replaceIds(next);
+      logActivity(
+        "favorite",
+        wasFavorite
+          ? "Removed property from favorites"
+          : "Added property to favorites"
+      );
+      return !wasFavorite;
+    },
+    [favorites, favoritesList, replaceIds]
+  );
+
+  const addFavorite = useCallback(
+    (id: string) => {
+      if (favorites.has(id)) return;
+      replaceIds([id, ...favoritesList]);
+      logActivity("favorite", "Added property to favorites");
+    },
+    [favorites, favoritesList, replaceIds]
+  );
+
+  const removeFavorite = useCallback(
+    (id: string) => {
+      if (!favorites.has(id)) return;
+      replaceIds(
+        favoritesList.filter((favoriteId) => favoriteId !== id)
+      );
+      logActivity("favorite", "Removed property from favorites");
+    },
+    [favorites, favoritesList, replaceIds]
+  );
 
   const clearFavorites = useCallback(() => {
-    favorites = new Set<string>();
-    saveFavorites();
-    notifyListeners();
-  }, []);
+    replaceIds([]);
+  }, [replaceIds]);
 
   return (
     <FavoritesContext.Provider
       value={{
-        favorites: favSet,
+        favorites,
         isFavorite,
         toggleFavorite,
         addFavorite,
         removeFavorite,
         clearFavorites,
-        favoritesCount: favSet.size,
-        favoritesList: [...favSet],
+        favoritesCount: favoritesList.length,
+        favoritesList,
+        isLoading,
       }}
     >
       {children}
@@ -120,7 +120,9 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 export function useFavorites() {
   const context = useContext(FavoritesContext);
   if (!context) {
-    throw new Error("useFavorites must be used within a FavoritesProvider");
+    throw new Error(
+      "useFavorites must be used within a FavoritesProvider"
+    );
   }
   return context;
 }

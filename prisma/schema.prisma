@@ -8,39 +8,41 @@ datasource db {
 }
 
 model Property {
-  id            String    @id @default(cuid())
-  titleEn       String
-  titleAr       String
-  descriptionEn String
-  descriptionAr String
-  price         Float
-  type          String    // apartment, villa, house, condo, townhouse, penthouse
-  status        String    // sale, rent
-  bedrooms      Int
-  bathrooms     Int
-  area          Float     // sqft
-  locationEn    String
-  locationAr    String
-  addressEn     String
-  addressAr     String
-  cityEn        String
-  cityAr        String
-  images        String    // comma-separated image URLs
-  features      String    // comma-separated features
-  yearBuilt     Int?
-  parking       Int       @default(0)
-  featured      Boolean   @default(false)
-  badge         String?   // new, hot, premium
-  lat           Float?
-  lng           Float?
-  virtualTourUrl String?  // URL for 360° virtual tour (Matterport, etc.)
-  virtualTourImages String? // comma-separated panoramic image URLs
-  agentId       String?
-  agent         Agent?    @relation(fields: [agentId], references: [id])
-  inquiries     Inquiry[]
-  reviews       Review[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  titleEn           String
+  titleAr           String
+  descriptionEn     String
+  descriptionAr     String
+  price             Float
+  type              String
+  status            String
+  bedrooms          Int
+  bathrooms         Int
+  area              Float
+  locationEn        String
+  locationAr        String
+  addressEn         String
+  addressAr         String
+  cityEn            String
+  cityAr            String
+  images            String
+  features          String
+  yearBuilt         Int?
+  parking           Int       @default(0)
+  featured          Boolean   @default(false)
+  badge             String?
+  lat               Float?
+  lng               Float?
+  virtualTourUrl    String?
+  virtualTourImages String?
+  agentId           String?
+  agent             Agent?    @relation(fields: [agentId], references: [id])
+  inquiries         Inquiry[]
+  reviews           Review[]
+  favoritedBy       UserFavorite[]
+  comparedBy        UserComparison[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model Agent {
@@ -54,8 +56,8 @@ model Agent {
   email           String     @unique
   phone           String
   image           String
-  specialization  String     // residential, commercial, rentals, luxury
-  experience      Int        // years
+  specialization  String
+  experience      Int
   propertiesCount Int        @default(0)
   rating          Float      @default(0)
   createdAt       DateTime   @default(now())
@@ -121,29 +123,33 @@ model Tour {
 // ===== User & Authentication Models =====
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String
-  password      String    // hashed password
-  role          String    @default("user") // admin, agent, user
-  avatar        String?
-  phone         String?
-  emailVerified DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  accounts      Account[]
-  sessions      Session[]
+  id                       String                    @id @default(cuid())
+  email                    String                    @unique
+  name                     String
+  password                 String
+  role                     String                    @default("user")
+  avatar                   String?
+  phone                    String?
+  emailVerified            DateTime?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  accounts                 Account[]
+  sessions                 Session[]
   conversationParticipants ConversationParticipant[]
-  messages      Message[]
-  commuteProfiles CommuteProfile[]
+  messages                 Message[]
+  commuteProfiles          CommuteProfile[]
+  favorites                UserFavorite[]
+  comparisons              UserComparison[]
+  savedSearches            SavedSearch[]
+  notifications            UserNotification[]
 }
 
 model Account {
   id                String  @id @default(cuid())
   userId            String
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type              String  // oauth, credentials
-  provider          String  // google, github, credentials
+  type              String
+  provider          String
   providerAccountId String
   refresh_token     String?
   access_token      String?
@@ -177,15 +183,77 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// ===== Account State Models =====
+
+model UserFavorite {
+  id         String   @id @default(cuid())
+  userId     String
+  propertyId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, propertyId])
+  @@index([propertyId])
+  @@index([userId, createdAt])
+}
+
+model UserComparison {
+  id         String   @id @default(cuid())
+  userId     String
+  propertyId String
+  position   Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, propertyId])
+  @@unique([userId, position])
+  @@index([propertyId])
+}
+
+model SavedSearch {
+  id                   String   @id @default(cuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                 String
+  filters              Json
+  signature            String
+  notificationsEnabled Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([userId, signature])
+  @@index([userId, createdAt])
+}
+
+model UserNotification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceId  String?
+  type      String
+  title     String
+  message   String
+  actionUrl String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, sourceId])
+  @@index([userId, read, createdAt])
+}
+
 // ===== Messaging Models =====
 
 model Conversation {
-  id         String    @id @default(cuid())
-  propertyId String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id           String                    @id @default(cuid())
+  propertyId   String?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
   participants ConversationParticipant[]
-  messages   Message[]
+  messages     Message[]
 }
 
 model ConversationParticipant {
@@ -220,7 +288,7 @@ model CommuteProfile {
   destinationName String
   destinationLat  Float
   destinationLng  Float
-  transportMode   String   @default("driving") // driving, transit, walking, cycling
+  transportMode   String   @default("driving")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -229,76 +297,76 @@ model CommuteProfile {
 
 model SiteSetting {
   id        String   @id @default(cuid())
-  key       String   @unique // e.g., "hero.title", "stats.propertiesSold", "market.avgPrice"
-  valueEn   String   // English value
-  valueAr   String   @default("") // Arabic value
-  category  String   @default("general") // general, hero, stats, market, footer, seo, contact
-  type      String   @default("text") // text, number, json, image, color, boolean
+  key       String   @unique
+  valueEn   String
+  valueAr   String   @default("")
+  category  String   @default("general")
+  type      String   @default("text")
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 }
 
 model Testimonial {
-  id         String   @id @default(cuid())
-  authorEn   String
-  authorAr   String   @default("")
-  roleEn     String
-  roleAr     String   @default("")
-  contentEn  String
-  contentAr  String   @default("")
-  avatar     String   @default("")
-  rating     Int      @default(5)
-  featured   Boolean  @default(false)
-  sortOrder  Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  authorEn  String
+  authorAr  String   @default("")
+  roleEn    String
+  roleAr    String   @default("")
+  contentEn String
+  contentAr String   @default("")
+  avatar    String   @default("")
+  rating    Int      @default(5)
+  featured  Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Neighborhood {
-  id          String   @id @default(cuid())
-  nameEn      String
-  nameAr      String   @default("")
-  descEn      String
-  descAr      String   @default("")
-  avgPrice    String   @default("")
-  propertyCount Int    @default(0)
-  searchQuery String   @default("")
-  image       String   @default("")
-  featured    Boolean  @default(false)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  nameEn        String
+  nameAr        String   @default("")
+  descEn        String
+  descAr        String   @default("")
+  avgPrice      String   @default("")
+  propertyCount Int      @default(0)
+  searchQuery   String   @default("")
+  image         String   @default("")
+  featured      Boolean  @default(false)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model PropertyTypeConfig {
-  id          String   @id @default(cuid())
-  nameEn      String
-  nameAr      String   @default("")
-  type        String   @unique // apartment, villa, etc.
-  icon        String   @default("Building2") // lucide icon name
-  listingCount Int     @default(0)
-  featured    Boolean  @default(false)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  nameEn       String
+  nameAr       String   @default("")
+  type         String   @unique
+  icon         String   @default("Building2")
+  listingCount Int      @default(0)
+  featured     Boolean  @default(false)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model MarketDataPoint {
   id        String   @id @default(cuid())
-  label     String   // e.g., "Jan", "Q1", "2024"
-  value     Float    // price in thousands
-  period    String   @default("monthly") // monthly, quarterly, yearly
+  label     String
+  value     Float
+  period    String   @default("monthly")
   createdAt DateTime @default(now())
 }
 
 model MarketStat {
-  id          String   @id @default(cuid())
-  labelEn     String
-  labelAr     String   @default("")
-  value       String
-  change      String   @default("")
-  changeType  String   @default("up") // up, down, neutral
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  labelEn    String
+  labelAr    String   @default("")
+  value      String
+  change     String   @default("")
+  changeType String   @default("up")
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }

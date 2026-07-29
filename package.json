@@ -1,17 +1,19 @@
 {
   "name": "estatepro",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "scripts": {
     "dev": "NODE_OPTIONS='--max-old-space-size=4096' bun server.ts 2>&1 | tee dev.log",
     "build": "next build",
     "start": "NODE_ENV=production bun server.ts 2>&1 | tee server.log",
     "lint": "eslint .",
+    "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "check": "bun run db:generate && bun run typecheck && bun run lint && bun run build",
+    "check": "bun run db:generate && bunx prisma validate && bun run test && bun run typecheck && bun run lint && bun run build",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset"
   },
   "dependencies": {
