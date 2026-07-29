@@ -1,79 +1,62 @@
-import { db } from '@/lib/db';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { db } from "@/lib/db";
+import { getCurrentUser, isStaffRole } from "@/lib/api-auth";
 
-// GET /api/conversations?userId=xxx
-export async function GET(req: NextRequest) {
+const createConversationSchema = z.object({
+  participantIds: z.array(z.string().trim().min(1)).min(1).max(8),
+  propertyId: z.string().trim().min(1).nullable().optional(),
+});
+
+const participantUserSelect = {
+  id: true,
+  name: true,
+  email: true,
+  avatar: true,
+  role: true,
+} as const;
+
+const conversationInclude = {
+  participants: {
+    include: { user: { select: participantUserSelect } },
+  },
+  messages: {
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+  },
+} as const;
+
+export async function GET(_request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+
   try {
-    const userId = req.nextUrl.searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json(
-        { conversations: [], fallback: true, error: 'userId is required' },
-        { status: 400 }
-      );
-    }
-
-    const participants = await db.conversationParticipant.findMany({
-      where: { userId },
-      include: {
-        conversation: {
-          include: {
-            participants: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    avatar: true,
-                    role: true,
-                  },
-                },
-              },
-            },
-            messages: {
-              orderBy: { createdAt: 'desc' },
-              take: 1,
-            },
-          },
-        },
-      },
-      orderBy: { conversation: { updatedAt: 'desc' } },
+    const rows = await db.conversation.findMany({
+      where: { participants: { some: { userId: user.id } } },
+      include: conversationInclude,
+      orderBy: { updatedAt: "desc" },
     });
 
-    // Count unread messages for each conversation
     const conversations = await Promise.all(
-      participants.map(async (p) => {
+      rows.map(async (conversation) => {
         const unreadCount = await db.message.count({
           where: {
-            conversationId: p.conversationId,
-            senderId: { not: userId },
+            conversationId: conversation.id,
+            senderId: { not: user.id },
             read: false,
           },
         });
 
-        const lastMessage = p.conversation.messages[0] || null;
-
+        const lastMessage = conversation.messages[0] || null;
         return {
-          id: p.conversation.id,
-          propertyId: p.conversation.propertyId,
-          createdAt: p.conversation.createdAt,
-          updatedAt: p.conversation.updatedAt,
-          participants: p.conversation.participants.map((cp) => ({
-            id: cp.id,
-            userId: cp.userId,
-            joinedAt: cp.joinedAt,
-            user: cp.user,
-          })),
-          lastMessage: lastMessage
-            ? {
-                id: lastMessage.id,
-                senderId: lastMessage.senderId,
-                content: lastMessage.content,
-                createdAt: lastMessage.createdAt,
-                read: lastMessage.read,
-              }
-            : null,
+          id: conversation.id,
+          propertyId: conversation.propertyId,
+          createdAt: conversation.createdAt,
+          updatedAt: conversation.updatedAt,
+          participants: conversation.participants,
+          lastMessage,
           unreadCount,
         };
       })
@@ -81,125 +64,117 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ conversations });
   } catch (error) {
-    console.error('Error fetching conversations:', error);
-    return NextResponse.json({ conversations: [], fallback: true });
+    console.error("Error fetching conversations:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch conversations" },
+      { status: 500 }
+    );
   }
 }
 
-// POST /api/conversations - Create new conversation
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { participantIds, propertyId } = body;
+export async function POST(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
 
-    if (!participantIds || !Array.isArray(participantIds) || participantIds.length < 2) {
+  try {
+    const parsed = createConversationSchema.safeParse(await request.json());
+    if (!parsed.success) {
       return NextResponse.json(
-        { conversation: null, error: 'At least 2 participant IDs are required' },
+        { error: "Invalid conversation request" },
         { status: 400 }
       );
     }
 
-    // Check if a conversation already exists between these participants (and optionally property)
-    const existingParticipant = await db.conversationParticipant.findFirst({
-      where: { userId: participantIds[0] },
-      include: {
-        conversation: {
-          include: {
-            participants: true,
-          },
-        },
-      },
+    const propertyId = parsed.data.propertyId || null;
+    const participantIds = Array.from(
+      new Set([user.id, ...parsed.data.participantIds])
+    );
+
+    if (participantIds.length < 2) {
+      return NextResponse.json(
+        { error: "At least one other participant is required" },
+        { status: 400 }
+      );
+    }
+
+    const participantUsers = await db.user.findMany({
+      where: { id: { in: participantIds } },
+      select: { id: true, role: true },
     });
 
-    // Look for an existing conversation with the same participants
-    let existingConversation = null;
-    if (existingParticipant) {
-      const userConversations = await db.conversationParticipant.findMany({
-        where: { userId: participantIds[0] },
-        include: {
-          conversation: {
-            include: {
-              participants: true,
-            },
-          },
-        },
-      });
+    if (participantUsers.length !== participantIds.length) {
+      return NextResponse.json(
+        { error: "One or more participants do not exist" },
+        { status: 400 }
+      );
+    }
 
-      for (const uc of userConversations) {
-        const conv = uc.conversation;
-        const convParticipantIds = conv.participants.map((p) => p.userId).sort();
-        const sortedInputIds = [...participantIds].sort();
+    if (
+      !isStaffRole(user.role) &&
+      participantUsers.some(
+        (participant) =>
+          participant.id !== user.id && !isStaffRole(participant.role)
+      )
+    ) {
+      return NextResponse.json(
+        { error: "Customers can only start conversations with agents or administrators" },
+        { status: 403 }
+      );
+    }
 
-        if (
-          convParticipantIds.length === sortedInputIds.length &&
-          convParticipantIds.every((id, idx) => id === sortedInputIds[idx]) &&
-          (!propertyId || conv.propertyId === propertyId)
-        ) {
-          existingConversation = conv;
-          break;
-        }
+    if (propertyId) {
+      const propertyExists = await db.property.count({ where: { id: propertyId } });
+      if (!propertyExists) {
+        return NextResponse.json({ error: "Property not found" }, { status: 404 });
       }
     }
 
-    if (existingConversation) {
-      // Return existing conversation with full details
-      const fullConversation = await db.conversation.findUnique({
-        where: { id: existingConversation.id },
-        include: {
-          participants: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  avatar: true,
-                  role: true,
-                },
-              },
-            },
-          },
-          messages: {
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-          },
-        },
-      });
-
-      return NextResponse.json({ conversation: fullConversation, existed: true });
-    }
-
-    // Create new conversation
-    const conversation = await db.conversation.create({
-      data: {
-        propertyId: propertyId || null,
-        participants: {
-          create: participantIds.map((userId: string) => ({
-            userId,
-          })),
-        },
+    const candidates = await db.conversation.findMany({
+      where: {
+        propertyId,
+        participants: { some: { userId: user.id } },
       },
-      include: {
-        participants: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                avatar: true,
-                role: true,
-              },
-            },
-          },
-        },
-        messages: true,
-      },
+      include: { participants: true },
     });
 
-    return NextResponse.json({ conversation, existed: false });
+    const expectedIds = [...participantIds].sort();
+    const existing = candidates.find((candidate) => {
+      const actualIds = candidate.participants.map((row) => row.userId).sort();
+      return (
+        actualIds.length === expectedIds.length &&
+        actualIds.every((id, index) => id === expectedIds[index])
+      );
+    });
+
+    if (existing) {
+      const conversation = await db.conversation.findUnique({
+        where: { id: existing.id },
+        include: conversationInclude,
+      });
+      return NextResponse.json({ conversation, existed: true });
+    }
+
+    const conversation = await db.conversation.create({
+      data: {
+        propertyId,
+        participants: {
+          create: participantIds.map((userId) => ({ userId })),
+        },
+      },
+      include: conversationInclude,
+    });
+
+    return NextResponse.json(
+      { conversation, existed: false },
+      { status: 201 }
+    );
   } catch (error) {
-    console.error('Error creating conversation:', error);
-    return NextResponse.json({ conversation: null, fallback: true });
+    console.error("Error creating conversation:", error);
+    return NextResponse.json(
+      { error: "Failed to create conversation" },
+      { status: 500 }
+    );
   }
 }
