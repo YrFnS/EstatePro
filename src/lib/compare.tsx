@@ -1,53 +1,15 @@
 "use client";
 
-import React, { createContext, useContext, useCallback, useSyncExternalStore } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+} from "react";
+import { MAX_COMPARISON_ITEMS } from "@/lib/account-state";
 import { logActivity } from "@/lib/activity-log";
+import { usePersistentIdCollection } from "@/lib/use-persistent-id-collection";
 
 type CompareState = string[];
-
-let compareList: CompareState = [];
-const listeners = new Set<() => void>();
-
-// Cached server snapshot to avoid infinite loop warning
-const emptyArray: CompareState = [];
-
-function notifyListeners() {
-  listeners.forEach((l) => l());
-}
-
-function subscribe(callback: () => void): () => void {
-  listeners.add(callback);
-  return () => listeners.delete(callback);
-}
-
-function getSnapshot(): CompareState {
-  return compareList;
-}
-
-function getServerSnapshot(): CompareState {
-  return emptyArray;
-}
-
-function initCompare() {
-  if (typeof window !== "undefined") {
-    try {
-      const saved = localStorage.getItem("estatepro-compare");
-      if (saved) {
-        compareList = JSON.parse(saved);
-      }
-    } catch {
-      compareList = [];
-    }
-  }
-}
-
-function saveCompare() {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("estatepro-compare", JSON.stringify(compareList));
-  }
-}
-
-initCompare();
 
 interface CompareContextType {
   compareList: CompareState;
@@ -57,60 +19,92 @@ interface CompareContextType {
   removeFromCompare: (id: string) => void;
   clearCompare: () => void;
   compareCount: number;
+  isLoading: boolean;
 }
 
-const CompareContext = createContext<CompareContextType | undefined>(undefined);
+const CompareContext = createContext<CompareContextType | undefined>(
+  undefined
+);
 
-export function CompareProvider({ children }: { children: React.ReactNode }) {
-  const list = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+export function CompareProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const {
+    ids: compareList,
+    replaceIds,
+    isLoading,
+  } = usePersistentIdCollection({
+    endpoint: "/api/account/comparison",
+    responseKey: "comparison",
+    guestStorageKey: "estatepro-compare",
+    accountStoragePrefix: "estatepro-compare",
+    maxItems: MAX_COMPARISON_ITEMS,
+  });
 
-  const isInCompare = useCallback((id: string) => compareList.includes(id), [list]);
+  const isInCompare = useCallback(
+    (id: string) => compareList.includes(id),
+    [compareList]
+  );
 
-  const toggleCompare = useCallback((id: string) => {
-    if (compareList.includes(id)) {
-      compareList = compareList.filter((i) => i !== id);
-      logActivity("compare", `Removed property from comparison`);
-    } else {
-      if (compareList.length >= 3) return false;
-      compareList = [...compareList, id];
-      logActivity("compare", `Added property to comparison`);
-    }
-    saveCompare();
-    notifyListeners();
-    return compareList.includes(id);
-  }, []);
+  const toggleCompare = useCallback(
+    (id: string) => {
+      if (compareList.includes(id)) {
+        replaceIds(
+          compareList.filter((propertyId) => propertyId !== id)
+        );
+        logActivity("compare", "Removed property from comparison");
+        return false;
+      }
 
-  const addToCompare = useCallback((id: string) => {
-    if (compareList.length >= 3) return false;
-    if (compareList.includes(id)) return true;
-    compareList = [...compareList, id];
-    saveCompare();
-    notifyListeners();
-    return true;
-  }, []);
+      if (compareList.length >= MAX_COMPARISON_ITEMS) return false;
 
-  const removeFromCompare = useCallback((id: string) => {
-    compareList = compareList.filter((i) => i !== id);
-    saveCompare();
-    notifyListeners();
-  }, []);
+      replaceIds([...compareList, id]);
+      logActivity("compare", "Added property to comparison");
+      return true;
+    },
+    [compareList, replaceIds]
+  );
+
+  const addToCompare = useCallback(
+    (id: string) => {
+      if (compareList.includes(id)) return true;
+      if (compareList.length >= MAX_COMPARISON_ITEMS) return false;
+
+      replaceIds([...compareList, id]);
+      logActivity("compare", "Added property to comparison");
+      return true;
+    },
+    [compareList, replaceIds]
+  );
+
+  const removeFromCompare = useCallback(
+    (id: string) => {
+      if (!compareList.includes(id)) return;
+      replaceIds(
+        compareList.filter((propertyId) => propertyId !== id)
+      );
+      logActivity("compare", "Removed property from comparison");
+    },
+    [compareList, replaceIds]
+  );
 
   const clearCompare = useCallback(() => {
-    compareList = [];
-    saveCompare();
-    notifyListeners();
-  }, []);
+    replaceIds([]);
+  }, [replaceIds]);
 
   return (
     <CompareContext.Provider
       value={{
-        compareList: list,
+        compareList,
         isInCompare,
         toggleCompare,
         addToCompare,
         removeFromCompare,
         clearCompare,
-        compareCount: list.length,
+        compareCount: compareList.length,
+        isLoading,
       }}
     >
       {children}
@@ -121,7 +115,9 @@ export function CompareProvider({ children }: { children: React.ReactNode }) {
 export function useCompare() {
   const context = useContext(CompareContext);
   if (!context) {
-    throw new Error("useCompare must be used within a CompareProvider");
+    throw new Error(
+      "useCompare must be used within a CompareProvider"
+    );
   }
   return context;
 }
