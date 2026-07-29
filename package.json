@@ -1,13 +1,15 @@
 {
-  "name": "nextjs_tailwind_shadcn_ts",
-  "version": "0.2.0",
+  "name": "estatepro",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "NODE_OPTIONS='--max-old-space-size=4096' bun server.ts 2>&1 | tee dev.log",
     "build": "next build",
     "start": "NODE_ENV=production bun server.ts 2>&1 | tee server.log",
     "lint": "eslint .",
-    "db:push": "DATABASE_URL=$(grep DATABASE_URL .env | cut -d= -f2-) prisma db push",
+    "typecheck": "tsc --noEmit",
+    "check": "bun run db:generate && bun run typecheck && bun run lint && bun run build",
+    "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset"
