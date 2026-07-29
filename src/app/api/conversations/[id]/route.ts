@@ -1,16 +1,23 @@
-import { db } from '@/lib/db';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { getCurrentUser } from "@/lib/api-auth";
 
-// GET /api/conversations/[id] - Get conversation with messages
 export async function GET(
-  req: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+
   try {
     const { id } = await params;
-
-    const conversation = await db.conversation.findUnique({
-      where: { id },
+    const conversation = await db.conversation.findFirst({
+      where: {
+        id,
+        participants: { some: { userId: user.id } },
+      },
       include: {
         participants: {
           include: {
@@ -26,7 +33,7 @@ export async function GET(
           },
         },
         messages: {
-          orderBy: { createdAt: 'asc' },
+          orderBy: { createdAt: "asc" },
           include: {
             sender: {
               select: {
@@ -43,14 +50,17 @@ export async function GET(
 
     if (!conversation) {
       return NextResponse.json(
-        { conversation: null, error: 'Conversation not found' },
+        { error: "Conversation not found" },
         { status: 404 }
       );
     }
 
     return NextResponse.json({ conversation });
   } catch (error) {
-    console.error('Error fetching conversation:', error);
-    return NextResponse.json({ conversation: null, fallback: true });
+    console.error("Error fetching conversation:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch conversation" },
+      { status: 500 }
+    );
   }
 }
