@@ -41,6 +41,7 @@ model Property {
   reviews           Review[]
   favoritedBy       UserFavorite[]
   comparedBy        UserComparison[]
+  alertMatches      PropertyAlertMatch[]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 }
@@ -142,6 +143,7 @@ model User {
   comparisons              UserComparison[]
   savedSearches            SavedSearch[]
   notifications            UserNotification[]
+  propertyAlerts           PropertyAlert[]
 }
 
 model Account {
@@ -223,6 +225,7 @@ model SavedSearch {
   notificationsEnabled Boolean  @default(false)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+  propertyAlert        PropertyAlert?
 
   @@unique([userId, signature])
   @@index([userId, createdAt])
@@ -243,6 +246,44 @@ model UserNotification {
 
   @@unique([userId, sourceId])
   @@index([userId, read, createdAt])
+}
+
+model PropertyAlert {
+  id                String               @id @default(cuid())
+  userId            String
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  savedSearchId     String?              @unique
+  savedSearch       SavedSearch?         @relation(fields: [savedSearchId], references: [id], onDelete: Cascade)
+  name              String
+  filters           Json
+  signature         String
+  frequency         String               @default("daily")
+  enabled           Boolean              @default(true)
+  currentMatchCount Int                  @default(0)
+  lastRunAt         DateTime?
+  lastMatchedAt     DateTime?
+  nextRunAt         DateTime?
+  lastError         String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  matches           PropertyAlertMatch[]
+
+  @@unique([userId, signature])
+  @@index([userId, createdAt])
+  @@index([enabled, nextRunAt])
+}
+
+model PropertyAlertMatch {
+  id         String        @id @default(cuid())
+  alertId    String
+  propertyId String
+  alert      PropertyAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  matchedAt  DateTime      @default(now())
+
+  @@unique([alertId, propertyId])
+  @@index([propertyId])
+  @@index([alertId, matchedAt])
 }
 
 // ===== Messaging Models =====
