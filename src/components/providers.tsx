@@ -7,18 +7,14 @@ import { FavoritesProvider } from "@/lib/favorites";
 import { CompareProvider } from "@/lib/compare";
 import { RecentlyViewedProvider } from "@/lib/recently-viewed";
 import { NotificationsProvider } from "@/lib/notifications";
-import { SavedSearchesProvider } from "@/lib/saved-searches";
 import { OpenRouterSettingsProvider } from "@/lib/openrouter-settings";
 import { AuthProvider } from "@/lib/auth-context";
 import { registerServiceWorker } from "@/lib/pwa";
 import { OfflineIndicator } from "@/components/real-estate/offline-indicator";
 import { InstallPwaBanner } from "@/components/real-estate/install-pwa-banner";
+import { NotificationSync } from "@/components/real-estate/notification-sync";
 
-export function Providers({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     registerServiceWorker();
   }, []);
@@ -35,15 +31,14 @@ export function Providers({
           <OpenRouterSettingsProvider>
             <FavoritesProvider>
               <CompareProvider>
-                <SavedSearchesProvider>
-                  <RecentlyViewedProvider>
-                    <NotificationsProvider>
-                      {children}
-                      <OfflineIndicator />
-                      <InstallPwaBanner />
-                    </NotificationsProvider>
-                  </RecentlyViewedProvider>
-                </SavedSearchesProvider>
+                <RecentlyViewedProvider>
+                  <NotificationsProvider>
+                    {children}
+                    <NotificationSync />
+                    <OfflineIndicator />
+                    <InstallPwaBanner />
+                  </NotificationsProvider>
+                </RecentlyViewedProvider>
               </CompareProvider>
             </FavoritesProvider>
           </OpenRouterSettingsProvider>
