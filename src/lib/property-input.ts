@@ -58,6 +58,7 @@ export const accountListingUpdateSchema = z.object({
 });
 
 export const adminListingInputSchema = propertyDraftSchema.extend({
+  images: z.string().trim().max(50_000).optional().default(""),
   featured: z.boolean().optional().default(false),
   badge: z.string().trim().max(30).nullable().optional(),
   agentId: z.string().trim().min(1).nullable().optional(),
