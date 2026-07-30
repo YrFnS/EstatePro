@@ -10,11 +10,11 @@ interface SyncSavedSearchAlertsOptions {
 
 export async function synchronizeSavedSearchPropertyAlerts(
   options: SyncSavedSearchAlertsOptions = {}
-): Promise<{ created: number; removed: number }> {
+): Promise<{ created: number; updated: number }> {
   const now = options.now || new Date();
   const limit = Math.min(500, Math.max(1, options.limit || 250));
 
-  const [missing, disabled] = await Promise.all([
+  const [missing, linked] = await Promise.all([
     db.savedSearch.findMany({
       where: {
         ...(options.userId ? { userId: options.userId } : {}),
@@ -33,13 +33,13 @@ export async function synchronizeSavedSearchPropertyAlerts(
     db.savedSearch.findMany({
       where: {
         ...(options.userId ? { userId: options.userId } : {}),
-        notificationsEnabled: false,
         propertyAlert: { isNot: null },
       },
       take: limit,
       select: {
+        notificationsEnabled: true,
         propertyAlert: {
-          select: { id: true },
+          select: { id: true, enabled: true },
         },
       },
     }),
@@ -67,13 +67,22 @@ export async function synchronizeSavedSearchPropertyAlerts(
     );
   }
 
-  const disabledAlertIds = disabled.flatMap((search) =>
-    search.propertyAlert ? [search.propertyAlert.id] : []
-  );
-  if (disabledAlertIds.length) {
+  let updated = 0;
+  for (const search of linked) {
+    const alert = search.propertyAlert;
+    if (!alert || alert.enabled === search.notificationsEnabled) {
+      continue;
+    }
+
+    updated += 1;
     operations.push(
-      db.propertyAlert.deleteMany({
-        where: { id: { in: disabledAlertIds } },
+      db.propertyAlert.update({
+        where: { id: alert.id },
+        data: {
+          enabled: search.notificationsEnabled,
+          nextRunAt: search.notificationsEnabled ? now : null,
+          lastError: null,
+        },
       })
     );
   }
@@ -84,6 +93,6 @@ export async function synchronizeSavedSearchPropertyAlerts(
 
   return {
     created: missing.length,
-    removed: disabledAlertIds.length,
+    updated,
   };
 }
