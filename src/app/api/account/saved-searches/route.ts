@@ -9,6 +9,7 @@ import {
   normalizeSavedSearchFilters,
   savedSearchSignature,
 } from "@/lib/account-state";
+import { synchronizeSavedSearchPropertyAlerts } from "@/lib/property-alert-saved-search-sync";
 
 const filterValueSchema = z.union([
   z.string().max(500),
@@ -65,6 +66,10 @@ export async function GET() {
   if (!user) return unauthorized();
 
   try {
+    await synchronizeSavedSearchPropertyAlerts({
+      userId: user.id,
+    });
+
     return NextResponse.json({
       savedSearches: await listSavedSearches(user.id),
     });
@@ -97,11 +102,15 @@ export async function POST(request: NextRequest) {
       ...(parsed.data.search ? [parsed.data.search] : []),
       ...(parsed.data.searches || []),
     ]
-      .map((item) => ({
-        name: item.name.trim(),
-        filters: normalizeSavedSearchFilters(item.filters),
-        notificationsEnabled: item.notificationsEnabled,
-      }))
+      .map((item) => {
+        const filters = normalizeSavedSearchFilters(item.filters);
+        return {
+          name: item.name.trim(),
+          filters,
+          notificationsEnabled: item.notificationsEnabled,
+          signature: hashSignature(item.name, filters),
+        };
+      })
       .filter((item) => Object.keys(item.filters).length > 0);
 
     if (!incoming.length) {
@@ -111,15 +120,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const currentCount = await db.savedSearch.count({
-      where: { userId: user.id },
-    });
-    const availableSlots = Math.max(
-      0,
-      MAX_SAVED_SEARCHES - currentCount
+    const [currentCount, existing] = await Promise.all([
+      db.savedSearch.count({
+        where: { userId: user.id },
+      }),
+      db.savedSearch.findMany({
+        where: {
+          userId: user.id,
+          signature: {
+            in: incoming.map((item) => item.signature),
+          },
+        },
+        select: { signature: true },
+      }),
+    ]);
+
+    const existingSignatures = new Set(
+      existing.map((item) => item.signature)
+    );
+    const newItems = incoming.filter(
+      (item) => !existingSignatures.has(item.signature)
     );
 
-    if (!availableSlots) {
+    if (
+      currentCount + newItems.length >
+      MAX_SAVED_SEARCHES
+    ) {
       return NextResponse.json(
         {
           error: `You can save up to ${MAX_SAVED_SEARCHES} searches`,
@@ -128,32 +154,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const candidates = incoming.slice(0, availableSlots);
+    if (newItems.length) {
+      await db.savedSearch.createMany({
+        data: newItems.map((item) => ({
+          userId: user.id,
+          name: item.name,
+          filters: item.filters as Prisma.InputJsonValue,
+          notificationsEnabled: item.notificationsEnabled,
+          signature: item.signature,
+        })),
+        skipDuplicates: true,
+      });
+    }
 
-    await db.savedSearch.createMany({
-      data: candidates.map((item) => ({
-        userId: user.id,
-        name: item.name,
-        filters: item.filters as Prisma.InputJsonValue,
-        notificationsEnabled: item.notificationsEnabled,
-        signature: hashSignature(item.name, item.filters),
-      })),
-      skipDuplicates: true,
+    await synchronizeSavedSearchPropertyAlerts({
+      userId: user.id,
     });
 
     const savedSearches = await listSavedSearches(user.id);
     const singleSignature = parsed.data.search
-      ? hashSignature(
-          candidates[0]?.name || "",
-          candidates[0]?.filters || {}
-        )
+      ? incoming[0]?.signature || null
       : null;
 
     return NextResponse.json(
       {
         savedSearch:
-          singleSignature &&
-          candidates[0]
+          singleSignature
             ? await db.savedSearch.findUnique({
                 where: {
                   userId_signature: {

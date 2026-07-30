@@ -13,12 +13,9 @@ import { AuthProvider } from "@/lib/auth-context";
 import { registerServiceWorker } from "@/lib/pwa";
 import { OfflineIndicator } from "@/components/real-estate/offline-indicator";
 import { InstallPwaBanner } from "@/components/real-estate/install-pwa-banner";
+import { NotificationSync } from "@/components/real-estate/notification-sync";
 
-export function Providers({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     registerServiceWorker();
   }, []);
@@ -39,6 +36,7 @@ export function Providers({
                   <RecentlyViewedProvider>
                     <NotificationsProvider>
                       {children}
+                      <NotificationSync />
                       <OfflineIndicator />
                       <InstallPwaBanner />
                     </NotificationsProvider>

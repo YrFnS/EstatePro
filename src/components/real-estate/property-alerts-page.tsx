@@ -1,39 +1,48 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useI18n } from "@/lib/i18n/provider";
-import { useRouter } from "@/lib/router";
-import { motion, AnimatePresence } from "framer-motion";
 import {
-  BellRing,
-  Plus,
-  Trash2,
-  Eye,
-  Zap,
-  Clock,
-  CalendarDays,
-  Home,
-  Building,
-  Castle,
-  Hotel,
-  Landmark,
-  Crown,
-  Search,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
   AlertCircle,
   BellOff,
-  Sparkles,
-  TrendingUp,
+  BellRing,
+  Building2,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  Eye,
+  Loader2,
   MapPin,
   Pencil,
+  Plus,
   RefreshCw,
-  Loader2,
+  Search,
+  Trash2,
+  Zap,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { AuthDialog } from "@/components/real-estate/auth-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -41,955 +50,1228 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { useAuth } from "@/lib/auth-context";
+import { useI18n } from "@/lib/i18n/provider";
+import {
+  type AccountPropertyAlert,
+  type PropertyAlertFilters,
+  type PropertyAlertFrequency,
+  normalizeLegacyPropertyAlert,
+} from "@/lib/property-alerts";
+import { useRouter } from "@/lib/router";
 
-// Types
-interface PropertyAlert {
-  id: string;
-  name: string;
-  propertyType: string;
-  status: string;
-  minPrice: number;
-  maxPrice: number;
-  bedrooms: string;
-  bathrooms: string;
-  minArea: number;
-  maxArea: number;
-  location: string;
-  frequency: "instant" | "daily" | "weekly";
-  enabled: boolean;
-  createdAt: string;
-  matchCount: number;
-}
-
-interface AlertHistoryItem {
-  id: string;
-  alertId: string;
-  alertName: string;
-  propertyName: string;
-  propertyId: string;
-  matchedAt: string;
-}
-
-const STORAGE_KEY = "estatepro-property-alerts";
-const HISTORY_KEY = "estatepro-property-alerts-history";
-
+const LEGACY_ALERTS_KEY = "estatepro-property-alerts";
 const PROPERTY_TYPES = [
-  { value: "apartment", icon: Building },
-  { value: "villa", icon: Castle },
-  { value: "house", icon: Home },
-  { value: "condo", icon: Hotel },
-  { value: "townhouse", icon: Landmark },
-  { value: "penthouse", icon: Crown },
+  "apartment",
+  "villa",
+  "house",
+  "condo",
+  "townhouse",
+  "penthouse",
 ];
 
-const FREQUENCY_STYLES: Record<string, string> = {
-  instant: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  daily: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
-  weekly: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
+interface AlertDraft {
+  name: string;
+  search: string;
+  type: string;
+  status: string;
+  minPrice: string;
+  maxPrice: string;
+  bedrooms: string;
+  bathrooms: string;
+  minArea: string;
+  maxArea: string;
+  frequency: PropertyAlertFrequency;
+  enabled: boolean;
+}
+
+const emptyDraft: AlertDraft = {
+  name: "",
+  search: "",
+  type: "any",
+  status: "any",
+  minPrice: "",
+  maxPrice: "",
+  bedrooms: "any",
+  bathrooms: "any",
+  minArea: "",
+  maxArea: "",
+  frequency: "daily",
+  enabled: true,
 };
 
-const FREQUENCY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  instant: Zap,
-  daily: Clock,
-  weekly: CalendarDays,
-};
+function draftToFilters(
+  draft: AlertDraft
+): PropertyAlertFilters {
+  const filters: PropertyAlertFilters = {};
 
-function loadAlerts(): PropertyAlert[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
+  if (draft.search.trim()) filters.search = draft.search.trim();
+  if (draft.type !== "any") filters.type = draft.type;
+  if (draft.status !== "any") filters.status = draft.status;
+  if (draft.minPrice) filters.minPrice = draft.minPrice;
+  if (draft.maxPrice) filters.maxPrice = draft.maxPrice;
+  if (draft.bedrooms !== "any") {
+    filters.bedrooms = draft.bedrooms;
   }
-}
-
-function saveAlerts(alerts: PropertyAlert[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(alerts));
-}
-
-function loadHistory(): AlertHistoryItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const data = localStorage.getItem(HISTORY_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
+  if (draft.bathrooms !== "any") {
+    filters.bathrooms = draft.bathrooms;
   }
+  if (draft.minArea) filters.minArea = draft.minArea;
+  if (draft.maxArea) filters.maxArea = draft.maxArea;
+
+  return filters;
 }
 
-function saveHistory(history: AlertHistoryItem[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+function alertToDraft(alert: AccountPropertyAlert): AlertDraft {
+  return {
+    name: alert.name,
+    search: alert.filters.search || "",
+    type: alert.filters.type || "any",
+    status: alert.filters.status || "any",
+    minPrice: alert.filters.minPrice || "",
+    maxPrice: alert.filters.maxPrice || "",
+    bedrooms: alert.filters.bedrooms || "any",
+    bathrooms: alert.filters.bathrooms || "any",
+    minArea: alert.filters.minArea || "",
+    maxArea: alert.filters.maxArea || "",
+    frequency: alert.frequency,
+    enabled: alert.enabled,
+  };
+}
+
+function formatDate(
+  value: string | null,
+  locale: string
+): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString(
+    locale === "ar" ? "ar-IQ" : "en-US",
+    {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }
+  );
+}
+
+function filterLabels(
+  alert: AccountPropertyAlert,
+  t: (key: string) => string
+): string[] {
+  const labels: string[] = [];
+  const filters = alert.filters;
+
+  if (filters.search) labels.push(`“${filters.search}”`);
+  if (filters.type) {
+    const key = `properties.${filters.type}`;
+    const translated = t(key);
+    labels.push(
+      translated === key ? filters.type : translated
+    );
+  }
+  if (filters.status) {
+    labels.push(
+      filters.status === "sale"
+        ? t("common.forSale")
+        : t("common.forRent")
+    );
+  }
+  if (filters.bedrooms) {
+    labels.push(
+      `${filters.bedrooms}+ ${t("properties.bedrooms")}`
+    );
+  }
+  if (filters.bathrooms) {
+    labels.push(
+      `${filters.bathrooms}+ ${t("properties.bathrooms")}`
+    );
+  }
+  if (filters.minPrice) {
+    labels.push(`≥ $${Number(filters.minPrice).toLocaleString()}`);
+  }
+  if (filters.maxPrice) {
+    labels.push(`≤ $${Number(filters.maxPrice).toLocaleString()}`);
+  }
+  if (filters.minArea) {
+    labels.push(
+      `≥ ${Number(filters.minArea).toLocaleString()} ${t(
+        "common.sqft"
+      )}`
+    );
+  }
+  if (filters.maxArea) {
+    labels.push(
+      `≤ ${Number(filters.maxArea).toLocaleString()} ${t(
+        "common.sqft"
+      )}`
+    );
+  }
+
+  return labels;
 }
 
 export function PropertyAlertsPage() {
-  const { t, locale } = useI18n();
+  const { t, locale, dir } = useI18n();
   const { navigate } = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
 
-  const [alerts, setAlerts] = useState<PropertyAlert[]>([]);
-  const [history, setHistory] = useState<AlertHistoryItem[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [editingAlertId, setEditingAlertId] = useState<string | null>(null);
-  const [matchCounts, setMatchCounts] = useState<Record<string, number>>({});
-  const [loadingMatches, setLoadingMatches] = useState<Record<string, boolean>>({});
+  const [alerts, setAlerts] = useState<AccountPropertyAlert[]>(
+    []
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(
+    null
+  );
+  const [draft, setDraft] = useState<AlertDraft>(emptyDraft);
+  const [saving, setSaving] = useState(false);
+  const [runningIds, setRunningIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(
+    new Set()
+  );
 
-  // Form state
-  const [alertName, setAlertName] = useState("");
-  const [propertyType, setPropertyType] = useState("apartment");
-  const [status, setStatus] = useState("for-sale");
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
-  const [bedrooms, setBedrooms] = useState("any");
-  const [bathrooms, setBathrooms] = useState("any");
-  const [minArea, setMinArea] = useState("");
-  const [maxArea, setMaxArea] = useState("");
-  const [location, setLocation] = useState("");
-  const [frequency, setFrequency] = useState<"instant" | "daily" | "weekly">("daily");
-
-  // Load data
-  useEffect(() => {
-    const loadedAlerts = loadAlerts();
-    setAlerts(loadedAlerts);
-    if (loadedAlerts.length > 0) {
-      setHistory(loadHistory());
-    }
-  }, []);
-
-  // Fetch real match counts from API
-  const fetchMatchCount = useCallback(async (alert: PropertyAlert) => {
-    setLoadingMatches((prev) => ({ ...prev, [alert.id]: true }));
-    try {
-      const queryParams = new URLSearchParams();
-      if (alert.propertyType && alert.propertyType !== "any") queryParams.set("type", alert.propertyType);
-      if (alert.status) queryParams.set("status", alert.status === "for-sale" ? "sale" : "rent");
-      if (alert.minPrice) queryParams.set("minPrice", String(alert.minPrice));
-      if (alert.maxPrice) queryParams.set("maxPrice", String(alert.maxPrice));
-      if (alert.bedrooms && alert.bedrooms !== "any") queryParams.set("bedrooms", alert.bedrooms.replace("+", ""));
-      if (alert.bathrooms && alert.bathrooms !== "any") queryParams.set("bathrooms", alert.bathrooms.replace("+", ""));
-      if (alert.minArea) queryParams.set("minArea", String(alert.minArea));
-      if (alert.maxArea) queryParams.set("maxArea", String(alert.maxArea));
-      if (alert.location) queryParams.set("search", alert.location);
-      queryParams.set("limit", "1");
-      const res = await fetch(`/api/properties?${queryParams.toString()}`);
-      const data = await res.json();
-      const count = data.total || 0;
-      setMatchCounts((prev) => ({ ...prev, [alert.id]: count }));
-      // Also update the alert's matchCount in localStorage
-      const currentAlerts = loadAlerts();
-      const updatedAlerts = currentAlerts.map((a) =>
-        a.id === alert.id ? { ...a, matchCount: count } : a
-      );
-      saveAlerts(updatedAlerts);
-    } catch {
-      setMatchCounts((prev) => ({ ...prev, [alert.id]: 0 }));
-    } finally {
-      setLoadingMatches((prev) => ({ ...prev, [alert.id]: false }));
-    }
-  }, []);
-
-  // Fetch match counts for all alerts on load
-  useEffect(() => {
-    if (alerts.length > 0) {
-      alerts.forEach((alert) => {
-        if (matchCounts[alert.id] === undefined) {
-          fetchMatchCount(alert);
-        }
-      });
-    }
-  }, [alerts, fetchMatchCount, matchCounts]);
-
-  const handleSaveAlerts = useCallback((updated: PropertyAlert[]) => {
-    setAlerts(updated);
-    saveAlerts(updated);
-  }, []);
-
-  const resetForm = () => {
-    setAlertName("");
-    setPropertyType("apartment");
-    setStatus("for-sale");
-    setMinPrice("");
-    setMaxPrice("");
-    setBedrooms("any");
-    setBathrooms("any");
-    setMinArea("");
-    setMaxArea("");
-    setLocation("");
-    setFrequency("daily");
-    setEditingAlertId(null);
-  };
-
-  const handleCreateAlert = () => {
-    if (!alertName.trim()) return;
-
-    // If editing an existing alert
-    if (editingAlertId) {
-      const updated = alerts.map((a) =>
-        a.id === editingAlertId
-          ? {
-              ...a,
-              name: alertName.trim(),
-              propertyType,
-              status,
-              minPrice: minPrice ? Number(minPrice) : 0,
-              maxPrice: maxPrice ? Number(maxPrice) : 0,
-              bedrooms,
-              bathrooms,
-              minArea: minArea ? Number(minArea) : 0,
-              maxArea: maxArea ? Number(maxArea) : 0,
-              location: location.trim(),
-              frequency,
-            }
-          : a
-      );
-      handleSaveAlerts(updated);
-      resetForm();
-      setShowForm(false);
-      // Re-fetch match count for edited alert
-      const editedAlert = updated.find((a) => a.id === editingAlertId);
-      if (editedAlert) {
-        setMatchCounts((prev) => {
-          const next = { ...prev };
-          delete next[editingAlertId];
-          return next;
-        });
-        fetchMatchCount(editedAlert);
-      }
+  const fetchAlerts = useCallback(async () => {
+    if (!user?.id) {
+      setAlerts([]);
+      setLoading(false);
       return;
     }
 
-    const newAlert: PropertyAlert = {
-      id: `alert-${Date.now()}`,
-      name: alertName.trim(),
-      propertyType,
-      status,
-      minPrice: minPrice ? Number(minPrice) : 0,
-      maxPrice: maxPrice ? Number(maxPrice) : 0,
-      bedrooms,
-      bathrooms,
-      minArea: minArea ? Number(minArea) : 0,
-      maxArea: maxArea ? Number(maxArea) : 0,
-      location: location.trim(),
-      frequency,
-      enabled: true,
-      createdAt: new Date().toISOString(),
-      matchCount: 0,
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        "/api/account/property-alerts",
+        {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }
+      );
+      const payload = (await response.json()) as {
+        alerts?: AccountPropertyAlert[];
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(
+          payload.error || "Failed to load property alerts"
+        );
+      }
+      setAlerts(payload.alerts || []);
+    } catch (caught) {
+      console.error(caught);
+      setError(
+        locale === "ar"
+          ? "تعذر تحميل تنبيهات العقارات."
+          : "We could not load your property alerts."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [locale, user?.id]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const raw =
+          typeof window !== "undefined"
+            ? window.localStorage.getItem(LEGACY_ALERTS_KEY)
+            : null;
+        const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+        const legacy = Array.isArray(parsed)
+          ? parsed
+              .map(normalizeLegacyPropertyAlert)
+              .filter(
+                (
+                  item
+                ): item is NonNullable<
+                  ReturnType<typeof normalizeLegacyPropertyAlert>
+                > => item !== null
+              )
+          : [];
+
+        if (legacy.length) {
+          const response = await fetch(
+            "/api/account/property-alerts",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ alerts: legacy }),
+            }
+          );
+
+          if (response.ok && typeof window !== "undefined") {
+            window.localStorage.removeItem(LEGACY_ALERTS_KEY);
+            toast.success(
+              locale === "ar"
+                ? "تمت مزامنة تنبيهاتك القديمة"
+                : "Your existing alerts were synchronized"
+            );
+          }
+        }
+      } catch (caught) {
+        console.error(
+          "Failed to migrate legacy property alerts:",
+          caught
+        );
+      }
+
+      if (!cancelled) await fetchAlerts();
     };
 
-    const updated = [newAlert, ...alerts];
-    handleSaveAlerts(updated);
-    resetForm();
-    setShowForm(false);
+    void load();
 
-    // Fetch match count for new alert
-    fetchMatchCount(newAlert);
-
-  };
-
-  const handleToggleAlert = (id: string) => {
-    const updated = alerts.map((a) => (a.id === id ? { ...a, enabled: !a.enabled } : a));
-    handleSaveAlerts(updated);
-  };
-
-  const handleDeleteAlert = (id: string) => {
-    const updated = alerts.filter((a) => a.id !== id);
-    handleSaveAlerts(updated);
-    // Also remove history for this alert
-    const updatedHistory = history.filter((h) => h.alertId !== id);
-    setHistory(updatedHistory);
-    saveHistory(updatedHistory);
-    // Clean up match count
-    setMatchCounts((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-  };
-
-  const handleEditAlert = (alert: PropertyAlert) => {
-    setEditingAlertId(alert.id);
-    setAlertName(alert.name);
-    setPropertyType(alert.propertyType);
-    setStatus(alert.status);
-    setMinPrice(alert.minPrice ? String(alert.minPrice) : "");
-    setMaxPrice(alert.maxPrice ? String(alert.maxPrice) : "");
-    setBedrooms(alert.bedrooms);
-    setBathrooms(alert.bathrooms);
-    setMinArea(alert.minArea ? String(alert.minArea) : "");
-    setMaxArea(alert.maxArea ? String(alert.maxArea) : "");
-    setLocation(alert.location);
-    setFrequency(alert.frequency);
-    setShowForm(true);
-  };
-
-  const handleViewMatches = (alert: PropertyAlert) => {
-    const params: Record<string, string> = {};
-    if (alert.propertyType && alert.propertyType !== "any") params.type = alert.propertyType;
-    if (alert.status) params.status = alert.status === "for-sale" ? "sale" : "rent";
-    if (alert.minPrice) params.minPrice = String(alert.minPrice);
-    if (alert.maxPrice) params.maxPrice = String(alert.maxPrice);
-    if (alert.bedrooms && alert.bedrooms !== "any") params.bedrooms = alert.bedrooms;
-    if (alert.location) params.search = alert.location;
-    navigate("properties", params);
-  };
-
-  const handleQuickTemplate = (template: {
-    name: string;
-    propertyType: string;
-    status: string;
-    minPrice: number;
-    maxPrice: number;
-    bedrooms: string;
-    location: string;
-    frequency: "instant" | "daily" | "weekly";
-  }) => {
-    const newAlert: PropertyAlert = {
-      id: `alert-${Date.now()}`,
-      name: template.name,
-      propertyType: template.propertyType,
-      status: template.status,
-      minPrice: template.minPrice,
-      maxPrice: template.maxPrice,
-      bedrooms: template.bedrooms,
-      bathrooms: "any",
-      minArea: 0,
-      maxArea: 0,
-      location: template.location,
-      frequency: template.frequency,
-      enabled: true,
-      createdAt: new Date().toISOString(),
-      matchCount: 0,
+    return () => {
+      cancelled = true;
     };
-    const updated = [newAlert, ...alerts];
-    handleSaveAlerts(updated);
-    fetchMatchCount(newAlert);
+  }, [authLoading, fetchAlerts, locale, user?.id]);
+
+  const recentMatches = useMemo(
+    () =>
+      alerts
+        .flatMap((alert) =>
+          alert.recentMatches.map((match) => ({
+            ...match,
+            alertName: alert.name,
+          }))
+        )
+        .sort(
+          (left, right) =>
+            new Date(right.matchedAt).getTime() -
+            new Date(left.matchedAt).getTime()
+        )
+        .slice(0, 8),
+    [alerts]
+  );
+
+  const openCreate = () => {
+    setEditingId(null);
+    setDraft(emptyDraft);
+    setDialogOpen(true);
   };
 
-  const formatRelativeTime = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return t("alerts.justNow") || "Just now";
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
+  const openEdit = (alert: AccountPropertyAlert) => {
+    setEditingId(alert.id);
+    setDraft(alertToDraft(alert));
+    setDialogOpen(true);
   };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+  const saveAlert = async () => {
+    const name = draft.name.trim();
+    const filters = draftToFilters(draft);
+
+    if (!name) {
+      toast.error(
+        locale === "ar"
+          ? "أدخل اسماً للتنبيه"
+          : "Enter a name for this alert"
+      );
+      return;
+    }
+    if (!Object.keys(filters).length) {
+      toast.error(
+        locale === "ar"
+          ? "اختر معياراً واحداً على الأقل"
+          : "Choose at least one alert criterion"
+      );
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const endpoint = editingId
+        ? `/api/account/property-alerts/${encodeURIComponent(
+            editingId
+          )}`
+        : "/api/account/property-alerts";
+      const response = await fetch(endpoint, {
+        method: editingId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          editingId
+            ? {
+                name,
+                filters,
+                frequency: draft.frequency,
+                enabled: draft.enabled,
+              }
+            : {
+                alert: {
+                  name,
+                  filters,
+                  frequency: draft.frequency,
+                  enabled: draft.enabled,
+                },
+              }
+        ),
+      });
+      const payload = (await response.json()) as {
+        alert?: AccountPropertyAlert;
+        alerts?: AccountPropertyAlert[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(
+          payload.error || "Failed to save property alert"
+        );
+      }
+
+      const updatedAlert = payload.alert;
+      if (updatedAlert) {
+        setAlerts((current) =>
+          current.map((item) =>
+            item.id === updatedAlert.id ? updatedAlert : item
+          )
+        );
+      } else if (payload.alerts) {
+        setAlerts(payload.alerts);
+      } else {
+        await fetchAlerts();
+      }
+
+      setDialogOpen(false);
+      toast.success(
+        locale === "ar"
+          ? editingId
+            ? "تم تحديث التنبيه"
+            : "تم إنشاء التنبيه"
+          : editingId
+            ? "Alert updated"
+            : "Alert created"
+      );
+    } catch (caught) {
+      toast.error(
+        caught instanceof Error
+          ? caught.message
+          : "Failed to save property alert"
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const getCriteriaBadges = (alert: PropertyAlert) => {
-    const badges: { label: string; color: string }[] = [];
-    if (alert.propertyType && alert.propertyType !== "any") {
-      badges.push({
-        label: t(`properties.${alert.propertyType}`) || alert.propertyType,
-        color: "bg-primary/10 text-primary",
-      });
+  const toggleAlert = async (
+    alert: AccountPropertyAlert,
+    enabled: boolean
+  ) => {
+    const previous = alerts;
+    setAlerts((current) =>
+      current.map((item) =>
+        item.id === alert.id ? { ...item, enabled } : item
+      )
+    );
+
+    try {
+      const response = await fetch(
+        `/api/account/property-alerts/${encodeURIComponent(
+          alert.id
+        )}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled }),
+        }
+      );
+      if (!response.ok) {
+        const payload = (await response.json()) as {
+          error?: string;
+        };
+        throw new Error(
+          payload.error || "Failed to update alert"
+        );
+      }
+      await fetchAlerts();
+    } catch (caught) {
+      setAlerts(previous);
+      toast.error(
+        caught instanceof Error
+          ? caught.message
+          : "Failed to update alert"
+      );
     }
-    if (alert.status) {
-      badges.push({
-        label: alert.status === "for-sale" ? t("common.forSale") : t("common.forRent"),
-        color: "bg-primary/10 text-primary",
-      });
-    }
-    if (alert.minPrice || alert.maxPrice) {
-      const min = alert.minPrice ? `$${(alert.minPrice / 1000).toFixed(0)}K` : "";
-      const max = alert.maxPrice ? `$${(alert.maxPrice / 1000).toFixed(0)}K` : "";
-      badges.push({
-        label: `${min}-${max}`,
-        color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-      });
-    }
-    if (alert.bedrooms && alert.bedrooms !== "any") {
-      badges.push({
-        label: `${alert.bedrooms} ${t("properties.bedrooms") || "Beds"}`,
-        color: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
-      });
-    }
-    if (alert.location) {
-      badges.push({
-        label: alert.location,
-        color: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
-      });
-    }
-    return badges;
   };
 
-  const quickTemplates = [
-    {
-      name: t("alerts.budgetHomes") || "Budget Homes Under $300K",
-      propertyType: "any",
-      status: "for-sale",
-      minPrice: 0,
-      maxPrice: 300000,
-      bedrooms: "any",
-      location: "",
-      frequency: "daily" as const,
-      icon: Home,
-      desc: t("alerts.budgetHomesDesc") || "Houses & apartments under $300K",
-      color: "text-primary",
-    },
-    {
-      name: t("alerts.luxuryProperties") || "Luxury Properties Over $1M",
-      propertyType: "any",
-      status: "for-sale",
-      minPrice: 1000000,
-      maxPrice: 0,
-      bedrooms: "3+",
-      location: "",
-      frequency: "weekly" as const,
-      icon: Crown,
-      desc: t("alerts.luxuryPropertiesDesc") || "Premium properties $1M+",
-      color: "text-amber-600",
-    },
-    {
-      name: t("alerts.newRentals") || "New Rentals in Downtown",
-      propertyType: "apartment",
-      status: "for-rent",
-      minPrice: 0,
-      maxPrice: 0,
-      bedrooms: "any",
-      location: "Downtown",
-      frequency: "instant" as const,
-      icon: Building,
-      desc: t("alerts.newRentalsDesc") || "Apartments for rent in Downtown",
-      color: "text-sky-600",
-    },
-    {
-      name: t("alerts.familyHomes") || "Family Homes 3+ Bedrooms",
-      propertyType: "house",
-      status: "for-sale",
-      minPrice: 0,
-      maxPrice: 0,
-      bedrooms: "3+",
-      location: "",
-      frequency: "daily" as const,
-      icon: Castle,
-      desc: t("alerts.familyHomesDesc") || "Houses with 3+ bedrooms",
-      color: "text-violet-600",
-    },
-  ];
+  const deleteAlert = async (alert: AccountPropertyAlert) => {
+    setDeletingIds((current) => new Set(current).add(alert.id));
+
+    try {
+      const response = await fetch(
+        `/api/account/property-alerts/${encodeURIComponent(
+          alert.id
+        )}`,
+        { method: "DELETE" }
+      );
+      if (!response.ok) {
+        const payload = (await response.json()) as {
+          error?: string;
+        };
+        throw new Error(
+          payload.error || "Failed to delete alert"
+        );
+      }
+      setAlerts((current) =>
+        current.filter((item) => item.id !== alert.id)
+      );
+      toast.success(
+        locale === "ar" ? "تم حذف التنبيه" : "Alert deleted"
+      );
+    } catch (caught) {
+      toast.error(
+        caught instanceof Error
+          ? caught.message
+          : "Failed to delete alert"
+      );
+    } finally {
+      setDeletingIds((current) => {
+        const next = new Set(current);
+        next.delete(alert.id);
+        return next;
+      });
+    }
+  };
+
+  const runAlert = async (alert: AccountPropertyAlert) => {
+    setRunningIds((current) => new Set(current).add(alert.id));
+
+    try {
+      const response = await fetch(
+        `/api/account/property-alerts/${encodeURIComponent(
+          alert.id
+        )}/run`,
+        { method: "POST" }
+      );
+      const payload = (await response.json()) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(
+          payload.error || "Failed to refresh alert"
+        );
+      }
+      await fetchAlerts();
+      toast.success(
+        locale === "ar"
+          ? "تم فحص العقارات المطابقة"
+          : "Matching properties checked"
+      );
+    } catch (caught) {
+      toast.error(
+        caught instanceof Error
+          ? caught.message
+          : "Failed to refresh alert"
+      );
+    } finally {
+      setRunningIds((current) => {
+        const next = new Set(current);
+        next.delete(alert.id);
+        return next;
+      });
+    }
+  };
+
+  if (authLoading || loading) {
+    return (
+      <div className="container mx-auto max-w-6xl px-4 py-12">
+        <div className="mb-8 h-10 w-72 animate-pulse rounded-lg bg-muted" />
+        <div className="grid gap-5 md:grid-cols-2">
+          {[1, 2, 3, 4].map((item) => (
+            <div
+              key={item}
+              className="h-64 animate-pulse rounded-2xl bg-muted"
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div
+        className="container mx-auto max-w-3xl px-4 py-16"
+        dir={dir}
+      >
+        <Card className="rounded-3xl border-dashed">
+          <CardContent className="flex flex-col items-center p-10 text-center md:p-16">
+            <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+              <BellRing className="h-10 w-10 text-primary" />
+            </div>
+            <h1 className="text-3xl font-bold">
+              {t("alerts.title")}
+            </h1>
+            <p className="mt-3 max-w-xl text-muted-foreground">
+              {locale === "ar"
+                ? "سجّل الدخول لحفظ تنبيهاتك في حسابك والحصول على إشعارات تلقائية عند إضافة عقارات مطابقة."
+                : "Sign in to save alerts to your account and receive automatic notifications when matching properties are added."}
+            </p>
+            <Button
+              className="mt-7"
+              onClick={() => setAuthDialogOpen(true)}
+            >
+              {t("auth.signIn")}
+            </Button>
+          </CardContent>
+        </Card>
+        <AuthDialog
+          open={authDialogOpen}
+          onOpenChange={setAuthDialogOpen}
+          defaultTab="login"
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-      {/* Hero Header */}
-      <div className="relative overflow-hidden bg-primary">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-10 start-10 w-72 h-72 bg-white rounded-full blur-3xl" />
-          <div className="absolute bottom-0 end-10 w-96 h-96 bg-primary-foreground/20 rounded-full blur-3xl" />
-        </div>
-        <div className="container mx-auto px-4 py-12 md:py-16 relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="max-w-3xl"
+    <div
+      className="container mx-auto max-w-6xl px-4 py-10 md:py-14"
+      dir={dir}
+    >
+      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <Badge
+            variant="secondary"
+            className="mb-3 rounded-full"
           >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm">
-                <BellRing className="w-6 h-6 text-primary-foreground" />
-              </div>
-              <Badge className="bg-white/20 border-0 backdrop-blur-sm">
-                <Sparkles className="w-3 h-3 me-1" />
-                {t("alerts.smartAlerts")}
-              </Badge>
-            </div>
-            <h1 className="text-3xl md:text-4xl font-bold text-primary-foreground mb-3">
-              {t("alerts.title") || "Property Alerts"}
-            </h1>
-            <p className="text-white/80 text-lg">
-              {t("alerts.subtitle") || "Get notified when new properties matching your criteria become available"}
-            </p>
-          </motion.div>
+            <CheckCircle2 className="me-1 h-3.5 w-3.5" />
+            {locale === "ar"
+              ? "متزامنة مع الحساب"
+              : "Account synchronized"}
+          </Badge>
+          <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
+            {t("alerts.title")}
+          </h1>
+          <p className="mt-3 max-w-2xl text-muted-foreground">
+            {t("alerts.subtitle")}
+          </p>
         </div>
+        <Button onClick={openCreate} className="gap-2">
+          <Plus className="h-4 w-4" />
+          {t("alerts.createAlert")}
+        </Button>
       </div>
 
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Form & Templates */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Create Alert Button */}
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-              <Button
-                onClick={() => {
-                  setShowForm(!showForm);
-                  if (showForm) resetForm();
-                }}
-                className="w-full h-12 text-base gap-2 bg-primary hover:bg-primary/90"
-                size="lg"
+      {error ? (
+        <Card className="mb-6 rounded-2xl border-destructive/30">
+          <CardContent className="flex items-center justify-between gap-4 p-5">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-destructive" />
+              <p>{error}</p>
+            </div>
+            <Button variant="outline" onClick={fetchAlerts}>
+              {locale === "ar" ? "إعادة المحاولة" : "Retry"}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {alerts.length === 0 ? (
+        <Card className="rounded-3xl border-dashed">
+          <CardContent className="flex flex-col items-center p-12 text-center">
+            <BellOff className="mb-4 h-12 w-12 text-muted-foreground/40" />
+            <h2 className="text-xl font-semibold">
+              {t("alerts.noAlerts")}
+            </h2>
+            <p className="mt-2 max-w-md text-muted-foreground">
+              {t("alerts.noAlertsDesc")}
+            </p>
+            <Button className="mt-6" onClick={openCreate}>
+              {t("alerts.createAlert")}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-2">
+          {alerts.map((alert) => {
+            const labels = filterLabels(alert, t);
+            const running = runningIds.has(alert.id);
+            const deleting = deletingIds.has(alert.id);
+            const FrequencyIcon =
+              alert.frequency === "instant"
+                ? Zap
+                : alert.frequency === "weekly"
+                  ? CalendarDays
+                  : Clock;
+
+            return (
+              <Card
+                key={alert.id}
+                className="rounded-2xl border-border/70"
               >
-                <Plus className="w-5 h-5" />
-                {t("alerts.createAlert") || "Create Alert"}
-              </Button>
-            </motion.div>
-
-            {/* Alert Creation Form */}
-            <AnimatePresence>
-              {showForm && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <Card className="border-primary/20/50 shadow-sm">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <BellRing className="w-5 h-5 text-primary" />
-                        {editingAlertId
-                          ? t("alerts.editAlert")
-                          : (t("alerts.createAlert") || "Create Alert")}
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <CardTitle className="truncate text-lg">
+                        {alert.name}
                       </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {/* Alert Name */}
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium">{t("alerts.alertName") || "Alert Name"}</label>
-                        <Input
-                          placeholder={t("alerts.alertNamePlaceholder") || "e.g., Downtown Apartments Under $500K"}
-                          value={alertName}
-                          onChange={(e) => setAlertName(e.target.value)}
-                          className="h-10"
-                        />
-                      </div>
-
-                      {/* Property Type */}
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium">{t("properties.propertyType") || "Property Type"}</label>
-                        <Select value={propertyType} onValueChange={setPropertyType}>
-                          <SelectTrigger className="h-10">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="any">{t("properties.any") || "Any"}</SelectItem>
-                            {PROPERTY_TYPES.map((pt) => (
-                              <SelectItem key={pt.value} value={pt.value}>
-                                {t(`properties.${pt.value}`) || pt.value}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Status */}
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium">{t("properties.propertyType") === "نوع العقار" ? "الحالة" : "Status"}</label>
-                        <Select value={status} onValueChange={setStatus}>
-                          <SelectTrigger className="h-10">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="for-sale">{t("common.forSale") || "For Sale"}</SelectItem>
-                            <SelectItem value="for-rent">{t("common.forRent") || "For Rent"}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Price Range */}
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium">{t("properties.priceRange") || "Price Range"}</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Input
-                            type="number"
-                            placeholder={t("properties.minPrice") || "Min Price"}
-                            value={minPrice}
-                            onChange={(e) => setMinPrice(e.target.value)}
-                            className="h-10"
-                          />
-                          <Input
-                            type="number"
-                            placeholder={t("properties.maxPrice") || "Max Price"}
-                            value={maxPrice}
-                            onChange={(e) => setMaxPrice(e.target.value)}
-                            className="h-10"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Bedrooms & Bathrooms */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-medium">{t("properties.bedrooms") || "Bedrooms"}</label>
-                          <Select value={bedrooms} onValueChange={setBedrooms}>
-                            <SelectTrigger className="h-10">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="any">{t("properties.any") || "Any"}</SelectItem>
-                              {[1, 2, 3, 4, 5].map((n) => (
-                                <SelectItem key={n} value={`${n}+`}>{n}+</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-medium">{t("properties.bathrooms") || "Bathrooms"}</label>
-                          <Select value={bathrooms} onValueChange={setBathrooms}>
-                            <SelectTrigger className="h-10">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="any">{t("properties.any") || "Any"}</SelectItem>
-                              {[1, 2, 3, 4].map((n) => (
-                                <SelectItem key={n} value={`${n}+`}>{n}+</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      {/* Area Range */}
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium">{t("properties.area") || "Area"} (sqft)</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Input
-                            type="number"
-                            placeholder={t("properties.minArea") || "Min"}
-                            value={minArea}
-                            onChange={(e) => setMinArea(e.target.value)}
-                            className="h-10"
-                          />
-                          <Input
-                            type="number"
-                            placeholder={t("properties.maxArea") || "Max"}
-                            value={maxArea}
-                            onChange={(e) => setMaxArea(e.target.value)}
-                            className="h-10"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Location */}
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium">{t("hero.location") || "Location"}</label>
-                        <Input
-                          placeholder={t("hero.searchPlaceholder") || "City, neighborhood..."}
-                          value={location}
-                          onChange={(e) => setLocation(e.target.value)}
-                          className="h-10"
-                        />
-                      </div>
-
-                      {/* Frequency */}
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium">{t("alerts.frequency") || "Frequency"}</label>
-                        <div className="grid grid-cols-3 gap-2">
-                          {(["instant", "daily", "weekly"] as const).map((freq) => {
-                            const FreqIcon = FREQUENCY_ICONS[freq];
-                            return (
-                              <button
-                                key={freq}
-                                onClick={() => setFrequency(freq)}
-                                className={`flex flex-col items-center gap-1 p-2.5 rounded-lg border-2 text-xs font-medium transition-all ${
-                                  frequency === freq
-                                    ? "border-primary bg-primary/10 text-primary"
-                                    : "border-muted hover:border-primary/30 dark:hover:border-primary/60"
-                                }`}
-                              >
-                                <FreqIcon className="w-4 h-4" />
-                                {t(`alerts.${freq}`) || freq.charAt(0).toUpperCase() + freq.slice(1)}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <Separator />
-
-                      {/* Submit */}
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={handleCreateAlert}
-                          disabled={!alertName.trim()}
-                          className="flex-1 bg-primary hover:bg-primary/90"
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Badge
+                          variant={
+                            alert.enabled
+                              ? "default"
+                              : "secondary"
+                          }
+                          className="rounded-full"
                         >
-                          <BellRing className="w-4 h-4 me-2" />
-                          {editingAlertId
-                            ? t("alerts.updateAlert")
-                            : (t("alerts.createAlert") || "Create Alert")}
-                        </Button>
-                        <Button variant="outline" onClick={() => { resetForm(); setShowForm(false); }}>
-                          {t("common.cancel") || "Cancel"}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Quick Alert Templates */}
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-amber-500" />
-                    {t("alerts.quickTemplates") || "Quick Templates"}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {quickTemplates.map((template, idx) => {
-                    const TemplateIcon = template.icon;
-                    return (
-                      <motion.button
-                        key={idx}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.3 + idx * 0.05 }}
-                        onClick={() => handleQuickTemplate(template)}
-                        className="w-full cursor-pointer hover:bg-muted/50 transition-colors rounded-xl p-4 border-2 border-dashed border-muted hover:border-primary/30 dark:hover:border-primary/60 text-start"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`mt-0.5 ${template.color}`}>
-                            <TemplateIcon className="w-5 h-5" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm">{template.name}</div>
-                            <div className="text-xs text-muted-foreground mt-0.5">{template.desc}</div>
-                          </div>
-                          <Plus className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                        </div>
-                      </motion.button>
-                    );
-                  })}
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
-
-          {/* Right Column - Alerts & History */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Active Alerts */}
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <BellRing className="w-5 h-5 text-primary" />
-                      {t("alerts.activeAlerts") || "Active Alerts"}
-                      {alerts.length > 0 && (
-                        <Badge variant="secondary" className="ms-1">
-                          {alerts.length}
+                          {alert.enabled
+                            ? t("alerts.enabled")
+                            : t("alerts.disabled")}
                         </Badge>
-                      )}
-                    </CardTitle>
+                        <Badge
+                          variant="outline"
+                          className="gap-1 rounded-full"
+                        >
+                          <FrequencyIcon className="h-3 w-3" />
+                          {t(`alerts.${alert.frequency}`)}
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className="rounded-full"
+                        >
+                          {alert.currentMatchCount}{" "}
+                          {t("alerts.matchCount")}
+                        </Badge>
+                        {alert.savedSearchId ? (
+                          <Badge
+                            variant="secondary"
+                            className="rounded-full"
+                          >
+                            {locale === "ar"
+                              ? "بحث محفوظ"
+                              : "Saved search"}
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </div>
+                    <Switch
+                      checked={alert.enabled}
+                      onCheckedChange={(checked) =>
+                        void toggleAlert(alert, checked)
+                      }
+                      aria-label={
+                        alert.enabled
+                          ? t("alerts.disabled")
+                          : t("alerts.enabled")
+                      }
+                    />
                   </div>
                 </CardHeader>
+
                 <CardContent>
-                  {alerts.length === 0 ? (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="text-center py-12"
-                    >
-                      <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted/50 mb-4">
-                        <BellOff className="w-10 h-10 text-muted-foreground" />
-                      </div>
-                      <h3 className="text-lg font-semibold text-muted-foreground mb-2">
-                        {t("alerts.noAlerts") || "No Alerts Yet"}
-                      </h3>
-                      <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-4">
-                        {t("alerts.noAlertsDesc") || "Create your first alert to get notified when matching properties become available"}
-                      </p>
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowForm(true)}
-                        className="gap-2"
+                  <div className="flex min-h-8 flex-wrap gap-2">
+                    {labels.map((label) => (
+                      <Badge
+                        key={label}
+                        variant="secondary"
+                        className="rounded-full font-normal"
                       >
-                        <Plus className="w-4 h-4" />
-                        {t("alerts.createAlert") || "Create Alert"}
-                      </Button>
-                    </motion.div>
-                  ) : (
-                    <div className="space-y-3">
-                      <AnimatePresence>
-                        {alerts.map((alert, idx) => (
-                          <motion.div
-                            key={alert.id}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, x: -20, height: 0 }}
-                            transition={{ delay: idx * 0.05 }}
-                            className={`rounded-xl border bg-card p-4 hover:shadow-md transition-all border-s-4 ${
-                              alert.enabled
-                                ? "border-s-primary"
-                                : "border-s-gray-300 dark:border-s-gray-600 opacity-70"
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h4 className="font-semibold text-base truncate">{alert.name}</h4>
-                                  <Badge className={FREQUENCY_STYLES[alert.frequency]}>
-                                    {(() => {
-                                      const FIcon = FREQUENCY_ICONS[alert.frequency];
-                                      return <FIcon className="w-3 h-3 me-1" />;
-                                    })()}
-                                    {t(`alerts.${alert.frequency}`) || alert.frequency}
-                                  </Badge>
-                                </div>
+                        {label}
+                      </Badge>
+                    ))}
+                  </div>
 
-                                {/* Criteria Badges */}
-                                <div className="flex flex-wrap gap-1.5 mt-2">
-                                  {getCriteriaBadges(alert).map((badge, i) => (
-                                    <Badge key={i} variant="secondary" className={`text-xs ${badge.color}`}>
-                                      {badge.label}
-                                    </Badge>
-                                  ))}
-                                </div>
-
-                                {/* Meta info */}
-                                <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                                  <span className="flex items-center gap-1">
-                                    <CalendarDays className="w-3 h-3" />
-                                    {formatDate(alert.createdAt)}
-                                  </span>
-                                  <span className="flex items-center gap-1">
-                                    <TrendingUp className="w-3 h-3" />
-                                    {t("alerts.matchCount") || "Matches"}:{" "}
-                                    {loadingMatches[alert.id] ? (
-                                      <Loader2 className="w-3 h-3 animate-spin" />
-                                    ) : (
-                                      <span className="font-semibold text-primary">{matchCounts[alert.id] ?? alert.matchCount}</span>
-                                    )}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Actions */}
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <Switch
-                                  checked={alert.enabled}
-                                  onCheckedChange={() => handleToggleAlert(alert.id)}
-                                  aria-label={alert.enabled ? t("alerts.enabled") || "Enabled" : t("alerts.disabled") || "Disabled"}
-                                />
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => fetchMatchCount(alert)}
-                                  title={t("alerts.refreshMatchCount")}
-                                >
-                                  <RefreshCw className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => handleViewMatches(alert)}
-                                  title={t("alerts.viewMatches") || "View Matches"}
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => handleEditAlert(alert)}
-                                  title={t("alerts.editAlertShort")}
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-destructive hover:text-destructive"
-                                  onClick={() => handleDeleteAlert(alert.id)}
-                                  title={t("alerts.deleteAlert") || "Delete Alert"}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </div>
-
-                            {/* Status label */}
-                            <div className="mt-2">
-                              <span className={`text-xs font-medium ${alert.enabled ? "text-primary" : "text-muted-foreground"}`}>
-                                {alert.enabled ? (t("alerts.enabled") || "Enabled") : (t("alerts.disabled") || "Disabled")}
-                              </span>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </AnimatePresence>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Alert History */}
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-sky-600" />
-                    {t("alerts.alertHistory") || "Alert History"}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {history.length === 0 ? (
-                    <div className="text-center py-8">
-                      <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-muted/50 mb-3">
-                        <AlertCircle className="w-7 h-7 text-muted-foreground" />
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {t("alerts.noHistory") || "No alert matches yet. Create an alert to start receiving notifications."}
+                  <div className="mt-5 grid grid-cols-2 gap-3 rounded-xl bg-muted/40 p-4 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        {locale === "ar"
+                          ? "آخر فحص"
+                          : "Last checked"}
+                      </p>
+                      <p className="mt-1 font-medium">
+                        {formatDate(alert.lastRunAt, locale)}
                       </p>
                     </div>
-                  ) : (
-                    <div className="relative">
-                      {/* Timeline line */}
-                      <div className="absolute start-5 top-0 bottom-0 w-px bg-border" />
-
-                      <div className="space-y-4 max-h-96 overflow-y-auto">
-                        {history.slice(0, 15).map((item, idx) => (
-                          <motion.div
-                            key={item.id}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.3 + idx * 0.03 }}
-                            className="relative ps-10"
-                          >
-                            {/* Timeline dot */}
-                            <div className="absolute start-3.5 top-1.5 w-3 h-3 rounded-full bg-primary border-2 border-background" />
-
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm">
-                                  <span className="font-medium">{t("alerts.matchedProperty") || "Matched property"}:</span>{" "}
-                                  <button
-                                    onClick={() => navigate("property-detail", { id: item.propertyId })}
-                                    className="text-primary hover:underline font-medium"
-                                  >
-                                    {item.propertyName}
-                                  </button>
-                                </div>
-                                <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                                  <BellRing className="w-3 h-3" />
-                                  {item.alertName}
-                                </div>
-                              </div>
-                              <span className="text-xs text-muted-foreground shrink-0">
-                                {formatRelativeTime(item.matchedAt)}
-                              </span>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        {locale === "ar"
+                          ? "الفحص القادم"
+                          : "Next check"}
+                      </p>
+                      <p className="mt-1 font-medium">
+                        {alert.enabled
+                          ? formatDate(alert.nextRunAt, locale)
+                          : "—"}
+                      </p>
                     </div>
-                  )}
+                  </div>
+
+                  {alert.lastError ? (
+                    <div className="mt-4 flex gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span className="line-clamp-2">
+                        {alert.lastError}
+                      </span>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    <Button
+                      className="flex-1 gap-2"
+                      onClick={() =>
+                        navigate("properties", alert.filters)
+                      }
+                    >
+                      <Eye className="h-4 w-4" />
+                      {t("alerts.viewMatches")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => void runAlert(alert)}
+                      disabled={!alert.enabled || running}
+                      aria-label={t("alerts.refreshMatchCount")}
+                    >
+                      {running ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => openEdit(alert)}
+                      aria-label={t("alerts.editAlert")}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => void deleteAlert(alert)}
+                      disabled={deleting}
+                      className="text-destructive hover:text-destructive"
+                      aria-label={t("alerts.deleteAlert")}
+                    >
+                      {deleting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
-            </motion.div>
-          </div>
+            );
+          })}
         </div>
-      </div>
+      )}
+
+      {recentMatches.length ? (
+        <section className="mt-12">
+          <div className="mb-5">
+            <h2 className="text-2xl font-bold">
+              {t("alerts.alertHistory")}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {locale === "ar"
+                ? "أحدث العقارات التي تم اكتشافها بواسطة تنبيهاتك."
+                : "The latest properties discovered by your alerts."}
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {recentMatches.map((match) => {
+              const title =
+                locale === "ar"
+                  ? match.property.titleAr
+                  : match.property.titleEn;
+              const location =
+                locale === "ar"
+                  ? match.property.locationAr
+                  : match.property.locationEn;
+              const image =
+                match.property.images.split(",")[0]?.trim();
+
+              return (
+                <Card
+                  key={match.id}
+                  className="cursor-pointer overflow-hidden rounded-2xl transition-shadow hover:shadow-md"
+                  onClick={() =>
+                    navigate("property-detail", {
+                      id: match.property.id,
+                    })
+                  }
+                >
+                  <CardContent className="flex gap-4 p-4">
+                    <div className="h-24 w-28 shrink-0 overflow-hidden rounded-xl bg-muted">
+                      {image ? (
+                        <img
+                          src={image}
+                          alt={title}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center">
+                          <Building2 className="h-7 w-7 text-muted-foreground/50" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <Badge
+                        variant="secondary"
+                        className="mb-2 max-w-full truncate"
+                      >
+                        {match.alertName}
+                      </Badge>
+                      <h3 className="truncate font-semibold">
+                        {title}
+                      </h3>
+                      <p className="mt-1 flex items-center gap-1 truncate text-sm text-muted-foreground">
+                        <MapPin className="h-3.5 w-3.5 shrink-0" />
+                        {location}
+                      </p>
+                      <p className="mt-2 font-bold text-primary">
+                        {t("common.currency")}
+                        {match.property.price.toLocaleString()}
+                        {match.property.status === "rent"
+                          ? t("common.perMonth")
+                          : ""}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingId
+                ? t("alerts.editAlert")
+                : t("alerts.createAlert")}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="grid gap-5 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="alert-name">
+                {t("alerts.alertName")}
+              </Label>
+              <Input
+                id="alert-name"
+                value={draft.name}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                placeholder={t("alerts.alertNamePlaceholder")}
+                maxLength={120}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="alert-search">
+                {locale === "ar"
+                  ? "الموقع أو كلمة البحث"
+                  : "Location or search phrase"}
+              </Label>
+              <div className="relative">
+                <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="alert-search"
+                  className="ps-9"
+                  value={draft.search}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      search: event.target.value,
+                    }))
+                  }
+                  placeholder={t(
+                    "properties.searchPlaceholder"
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>{t("properties.propertyType")}</Label>
+                <Select
+                  value={draft.type}
+                  onValueChange={(value) =>
+                    setDraft((current) => ({
+                      ...current,
+                      type: value,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">
+                      {t("properties.any")}
+                    </SelectItem>
+                    {PROPERTY_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {t(`properties.${type}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>
+                  {t("common.sale")}/{t("common.rent")}
+                </Label>
+                <Select
+                  value={draft.status}
+                  onValueChange={(value) =>
+                    setDraft((current) => ({
+                      ...current,
+                      status: value,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">
+                      {t("properties.any")}
+                    </SelectItem>
+                    <SelectItem value="sale">
+                      {t("common.forSale")}
+                    </SelectItem>
+                    <SelectItem value="rent">
+                      {t("common.forRent")}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>{t("properties.minPrice")}</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={draft.minPrice}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      minPrice: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t("properties.maxPrice")}</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={draft.maxPrice}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      maxPrice: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>{t("properties.bedrooms")}</Label>
+                <Select
+                  value={draft.bedrooms}
+                  onValueChange={(value) =>
+                    setDraft((current) => ({
+                      ...current,
+                      bedrooms: value,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">
+                      {t("properties.any")}
+                    </SelectItem>
+                    {[1, 2, 3, 4, 5].map((value) => (
+                      <SelectItem
+                        key={value}
+                        value={String(value)}
+                      >
+                        {value}+
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t("properties.bathrooms")}</Label>
+                <Select
+                  value={draft.bathrooms}
+                  onValueChange={(value) =>
+                    setDraft((current) => ({
+                      ...current,
+                      bathrooms: value,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">
+                      {t("properties.any")}
+                    </SelectItem>
+                    {[1, 2, 3, 4].map((value) => (
+                      <SelectItem
+                        key={value}
+                        value={String(value)}
+                      >
+                        {value}+
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>{t("properties.minArea")}</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={draft.minArea}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      minArea: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t("properties.maxArea")}</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={draft.maxArea}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      maxArea: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t("alerts.frequency")}</Label>
+              <Select
+                value={draft.frequency}
+                onValueChange={(value) =>
+                  setDraft((current) => ({
+                    ...current,
+                    frequency:
+                      value as PropertyAlertFrequency,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="instant">
+                    <span className="flex items-center gap-2">
+                      <Zap className="h-3.5 w-3.5" />
+                      {t("alerts.instant")}
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="daily">
+                    {t("alerts.daily")}
+                  </SelectItem>
+                  <SelectItem value="weekly">
+                    {t("alerts.weekly")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {locale === "ar"
+                  ? "التنبيهات الفورية تُفحص كل 15 دقيقة. اليومية والأسبوعية تُفحص حسب الجدول."
+                  : "Instant alerts are checked every 15 minutes; daily and weekly alerts follow their selected schedule."}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl border p-4">
+              <div>
+                <p className="font-medium">
+                  {t("alerts.enabled")}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {locale === "ar"
+                    ? "أوقف التنبيه مؤقتاً بدون حذفه."
+                    : "Pause this alert without deleting it."}
+                </p>
+              </div>
+              <Switch
+                checked={draft.enabled}
+                onCheckedChange={(checked) =>
+                  setDraft((current) => ({
+                    ...current,
+                    enabled: checked,
+                  }))
+                }
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDialogOpen(false)}
+              disabled={saving}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={() => void saveAlert()} disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                  {t("common.loading")}
+                </>
+              ) : editingId ? (
+                t("alerts.updateAlert")
+              ) : (
+                t("alerts.createAlert")
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

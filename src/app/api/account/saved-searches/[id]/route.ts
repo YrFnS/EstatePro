@@ -8,6 +8,7 @@ import {
   normalizeSavedSearchFilters,
   savedSearchSignature,
 } from "@/lib/account-state";
+import { normalizePropertyAlertFilters } from "@/lib/property-alerts";
 
 const filterValueSchema = z.union([
   z.string().max(500),
@@ -41,7 +42,18 @@ export async function PUT(
     const { id } = await params;
     const existing = await db.savedSearch.findFirst({
       where: { id, userId: user.id },
-      select: { id: true },
+      select: {
+        id: true,
+        filters: true,
+        propertyAlert: {
+          select: {
+            id: true,
+            currentMatchCount: true,
+            lastRunAt: true,
+            lastMatchedAt: true,
+          },
+        },
+      },
     });
 
     if (!existing) {
@@ -62,6 +74,7 @@ export async function PUT(
       );
     }
 
+    const name = parsed.data.name.trim();
     const filters = normalizeSavedSearchFilters(
       parsed.data.filters
     );
@@ -72,18 +85,83 @@ export async function PUT(
       );
     }
 
-    const savedSearch = await db.savedSearch.update({
+    const alertFilters = normalizePropertyAlertFilters(filters);
+    const previousAlertFilters = normalizePropertyAlertFilters(
+      existing.filters
+    );
+    const filtersChanged =
+      JSON.stringify(alertFilters) !==
+      JSON.stringify(previousAlertFilters);
+    const now = new Date();
+
+    const operations: Prisma.PrismaPromise<unknown>[] = [
+      db.savedSearch.update({
+        where: { id },
+        data: {
+          name,
+          filters: filters as Prisma.InputJsonValue,
+          notificationsEnabled:
+            parsed.data.notificationsEnabled,
+          signature: hashSignature(name, filters),
+        },
+      }),
+    ];
+
+    if (existing.propertyAlert) {
+      if (filtersChanged) {
+        operations.push(
+          db.propertyAlertMatch.deleteMany({
+            where: {
+              alertId: existing.propertyAlert.id,
+            },
+          })
+        );
+      }
+
+      operations.push(
+        db.propertyAlert.update({
+          where: { id: existing.propertyAlert.id },
+          data: {
+            name,
+            filters: alertFilters,
+            enabled: parsed.data.notificationsEnabled,
+            nextRunAt: parsed.data.notificationsEnabled
+              ? now
+              : null,
+            currentMatchCount: filtersChanged
+              ? 0
+              : existing.propertyAlert.currentMatchCount,
+            lastRunAt: filtersChanged
+              ? null
+              : existing.propertyAlert.lastRunAt,
+            lastMatchedAt: filtersChanged
+              ? null
+              : existing.propertyAlert.lastMatchedAt,
+            lastError: null,
+          },
+        })
+      );
+    } else if (parsed.data.notificationsEnabled) {
+      operations.push(
+        db.propertyAlert.create({
+          data: {
+            userId: user.id,
+            savedSearchId: id,
+            name,
+            filters: alertFilters,
+            signature: `saved-search:${id}`,
+            frequency: "daily",
+            enabled: true,
+            nextRunAt: now,
+          },
+        })
+      );
+    }
+
+    await db.$transaction(operations);
+
+    const savedSearch = await db.savedSearch.findUnique({
       where: { id },
-      data: {
-        name: parsed.data.name.trim(),
-        filters: filters as Prisma.InputJsonValue,
-        notificationsEnabled:
-          parsed.data.notificationsEnabled,
-        signature: hashSignature(
-          parsed.data.name,
-          filters
-        ),
-      },
       select: {
         id: true,
         name: true,
