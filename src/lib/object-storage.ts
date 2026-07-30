@@ -88,6 +88,14 @@ function encodePath(value: string): string {
     .join("/");
 }
 
+export function publicUrlForStorageKey(storageKey: string): string {
+  const config = storageConfig();
+  if (!config) {
+    throw new Error("Object storage is not configured");
+  }
+  return `${config.publicBaseUrl}/${encodePath(storageKey)}`;
+}
+
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -256,7 +264,7 @@ export function createUploadTarget(input: {
 
   return {
     uploadUrl: signed.url,
-    publicUrl: `${config.publicBaseUrl}/${encodePath(storageKey)}`,
+    publicUrl: publicUrlForStorageKey(storageKey),
     storageKey,
     headers: { "Content-Type": input.mimeType },
     expiresAt: signed.expiresAt.toISOString(),
