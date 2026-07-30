@@ -14,9 +14,21 @@ function nonNegativeInteger(value: string | null): number | undefined {
 
 export function buildPropertyWhere(
   searchParams: URLSearchParams,
-  options: { requireCoordinates?: boolean } = {}
+  options: {
+    requireCoordinates?: boolean;
+    includeUnpublished?: boolean;
+  } = {}
 ): Prisma.PropertyWhereInput {
   const where: Prisma.PropertyWhereInput = {};
+
+  if (!options.includeUnpublished) {
+    where.listingStatus = "published";
+  }
+
+  const requestedListingStatus = searchParams.get("listingStatus");
+  if (options.includeUnpublished && requestedListingStatus) {
+    where.listingStatus = requestedListingStatus;
+  }
 
   const featured = searchParams.get("featured");
   const status = searchParams.get("status");
@@ -29,11 +41,15 @@ export function buildPropertyWhere(
   const minArea = finiteNumber(searchParams.get("minArea"));
   const maxArea = finiteNumber(searchParams.get("maxArea"));
   const agentId = searchParams.get("agentId")?.trim();
+  const ownerUserId = searchParams.get("ownerUserId")?.trim();
 
   if (featured === "true") where.featured = true;
   if (status === "sale" || status === "rent") where.status = status;
   if (type && type !== "all") where.type = type;
   if (agentId) where.agentId = agentId;
+  if (options.includeUnpublished && ownerUserId) {
+    where.ownerUserId = ownerUserId;
+  }
   if (bedrooms !== undefined) where.bedrooms = { gte: bedrooms };
   if (bathrooms !== undefined) where.bathrooms = { gte: bathrooms };
 
@@ -76,8 +92,14 @@ export function buildPropertyWhere(
     east !== undefined &&
     west !== undefined
   ) {
-    where.lat = { gte: Math.min(south, north), lte: Math.max(south, north) };
-    where.lng = { gte: Math.min(west, east), lte: Math.max(west, east) };
+    where.lat = {
+      gte: Math.min(south, north),
+      lte: Math.max(south, north),
+    };
+    where.lng = {
+      gte: Math.min(west, east),
+      lte: Math.max(west, east),
+    };
   } else if (options.requireCoordinates) {
     where.lat = { not: null };
     where.lng = { not: null };
@@ -104,8 +126,10 @@ export function buildPropertyOrderBy(
 }
 
 export function getPropertyPagination(searchParams: URLSearchParams) {
-  const requestedPage = nonNegativeInteger(searchParams.get("page")) || 1;
-  const requestedLimit = nonNegativeInteger(searchParams.get("limit")) || 9;
+  const requestedPage =
+    nonNegativeInteger(searchParams.get("page")) || 1;
+  const requestedLimit =
+    nonNegativeInteger(searchParams.get("limit")) || 9;
   const page = Math.max(1, requestedPage);
   const limit = Math.min(48, Math.max(1, requestedLimit));
 

@@ -8,42 +8,101 @@ datasource db {
 }
 
 model Property {
-  id                String    @id @default(cuid())
-  titleEn           String
-  titleAr           String
-  descriptionEn     String
-  descriptionAr     String
-  price             Float
-  type              String
-  status            String
-  bedrooms          Int
-  bathrooms         Int
-  area              Float
-  locationEn        String
-  locationAr        String
-  addressEn         String
-  addressAr         String
-  cityEn            String
-  cityAr            String
-  images            String
-  features          String
-  yearBuilt         Int?
-  parking           Int       @default(0)
-  featured          Boolean   @default(false)
-  badge             String?
-  lat               Float?
-  lng               Float?
-  virtualTourUrl    String?
-  virtualTourImages String?
-  agentId           String?
-  agent             Agent?    @relation(fields: [agentId], references: [id])
-  inquiries         Inquiry[]
-  reviews           Review[]
-  favoritedBy       UserFavorite[]
-  comparedBy        UserComparison[]
-  alertMatches      PropertyAlertMatch[]
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  titleEn            String
+  titleAr            String
+  descriptionEn      String
+  descriptionAr      String
+  price              Float
+  type               String
+  status             String
+  bedrooms           Int
+  bathrooms          Int
+  area               Float
+  locationEn         String
+  locationAr         String
+  addressEn          String
+  addressAr          String
+  cityEn             String
+  cityAr             String
+  images             String    @default("")
+  features           String    @default("")
+  yearBuilt          Int?
+  parking            Int       @default(0)
+  featured           Boolean   @default(false)
+  badge              String?
+  lat                Float?
+  lng                Float?
+  virtualTourUrl     String?
+  virtualTourImages  String?
+  agentId            String?
+  agent              Agent?    @relation(fields: [agentId], references: [id])
+  listingStatus      String    @default("published")
+  ownerUserId        String?
+  owner              User?     @relation("PropertyOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  createdByUserId    String?
+  createdBy          User?     @relation("PropertyCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reviewedByUserId   String?
+  reviewedBy         User?     @relation("PropertyReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reviewNotes        String?
+  submittedAt        DateTime?
+  reviewedAt         DateTime?
+  publishedAt        DateTime?
+  rejectedAt         DateTime?
+  archivedAt         DateTime?
+  scheduledPublishAt DateTime?
+  inquiries          Inquiry[]
+  reviews            Review[]
+  favoritedBy        UserFavorite[]
+  comparedBy         UserComparison[]
+  alertMatches       PropertyAlertMatch[]
+  media              PropertyMedia[]
+  auditLogs          PropertyAuditLog[]
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([listingStatus, createdAt])
+  @@index([ownerUserId, listingStatus])
+  @@index([scheduledPublishAt, listingStatus])
+}
+
+model PropertyMedia {
+  id         String   @id @default(cuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  url        String
+  storageKey String?
+  source     String   @default("external")
+  type       String   @default("image")
+  mimeType   String?
+  sizeBytes  Int?
+  width      Int?
+  height     Int?
+  sortOrder  Int      @default(0)
+  isCover    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([propertyId, storageKey])
+  @@index([propertyId, sortOrder])
+  @@index([propertyId, isCover])
+}
+
+model PropertyAuditLog {
+  id             String   @id @default(cuid())
+  propertyId     String
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  actorUserId    String?
+  actor          User?    @relation("PropertyAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorName      String?
+  action         String
+  previousStatus String?
+  newStatus      String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([propertyId, createdAt])
+  @@index([actorUserId, createdAt])
 }
 
 model Agent {
@@ -144,6 +203,10 @@ model User {
   savedSearches            SavedSearch[]
   notifications            UserNotification[]
   propertyAlerts           PropertyAlert[]
+  ownedProperties          Property[]                @relation("PropertyOwner")
+  createdProperties        Property[]                @relation("PropertyCreator")
+  reviewedProperties       Property[]                @relation("PropertyReviewer")
+  propertyAuditEvents      PropertyAuditLog[]        @relation("PropertyAuditActor")
 }
 
 model Account {
@@ -216,15 +279,15 @@ model UserComparison {
 }
 
 model SavedSearch {
-  id                   String   @id @default(cuid())
+  id                   String         @id @default(cuid())
   userId               String
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   name                 String
   filters              Json
   signature            String
-  notificationsEnabled Boolean  @default(false)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  notificationsEnabled Boolean        @default(false)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
   propertyAlert        PropertyAlert?
 
   @@unique([userId, signature])

@@ -13,7 +13,10 @@ const createTourSchema = z.object({
   date: z.string().trim().min(4).max(40),
   time: z.string().trim().min(1).max(40),
   notes: z.string().trim().max(2_000).optional().default(""),
-  tourType: z.enum(["in-person", "virtual", "video-call"]).optional().default("in-person"),
+  tourType: z
+    .enum(["in-person", "virtual", "video-call"])
+    .optional()
+    .default("in-person"),
 });
 
 export async function POST(request: NextRequest) {
@@ -35,47 +38,108 @@ export async function POST(request: NextRequest) {
     const parsed = createTourSchema.safeParse(await request.json());
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Invalid tour request", details: parsed.error.flatten().fieldErrors },
+        {
+          error: "Invalid tour request",
+          details: parsed.error.flatten().fieldErrors,
+        },
         { status: 400 }
       );
     }
 
     const input = parsed.data;
-    const propertyExists = await db.property.count({ where: { id: input.propertyId } });
-    if (!propertyExists) {
-      return NextResponse.json({ error: "Property not found" }, { status: 404 });
-    }
-
-    const tour = await db.tour.create({
-      data: {
-        propertyId: input.propertyId,
-        name: input.name,
-        email: input.email.toLowerCase(),
-        phone: input.phone,
-        date: input.date,
-        time: input.time,
-        notes: input.notes,
-        tourType: input.tourType,
-        status: "pending",
+    const property = await db.property.findFirst({
+      where: {
+        id: input.propertyId,
+        listingStatus: "published",
+      },
+      select: {
+        id: true,
+        titleEn: true,
+        titleAr: true,
+        ownerUserId: true,
+        agent: { select: { email: true } },
       },
     });
+    if (!property) {
+      return NextResponse.json(
+        { error: "Property not found" },
+        { status: 404 }
+      );
+    }
 
-    return NextResponse.json({ success: true, tour }, { status: 201 });
+    const tour = await db.$transaction(async (transaction) => {
+      const created = await transaction.tour.create({
+        data: {
+          propertyId: property.id,
+          name: input.name,
+          email: input.email.toLowerCase(),
+          phone: input.phone,
+          date: input.date,
+          time: input.time,
+          notes: input.notes,
+          tourType: input.tourType,
+          status: "pending",
+        },
+      });
+
+      let recipientId = property.ownerUserId;
+      if (!recipientId && property.agent?.email) {
+        recipientId =
+          (
+            await transaction.user.findUnique({
+              where: { email: property.agent.email.toLowerCase() },
+              select: { id: true },
+            })
+          )?.id || null;
+      }
+      if (recipientId) {
+        await transaction.userNotification.create({
+          data: {
+            userId: recipientId,
+            sourceId: `property-tour:${created.id}`,
+            type: "inquiry",
+            title: "New tour request",
+            message: `${input.name} requested a tour of “${
+              property.titleEn || property.titleAr
+            }” on ${input.date} at ${input.time}.`,
+            actionUrl: `/my-listings?listing=${encodeURIComponent(
+              property.id
+            )}`,
+          },
+        });
+      }
+      return created;
+    });
+
+    return NextResponse.json(
+      { success: true, tour },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Tour creation error:", error);
-    return NextResponse.json({ error: "Failed to schedule tour" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to schedule tour" },
+      { status: 500 }
+    );
   }
 }
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 }
+    );
   }
 
   try {
-    const propertyId = request.nextUrl.searchParams.get("propertyId")?.trim();
-    const where: Prisma.TourWhereInput = propertyId ? { propertyId } : {};
+    const propertyId = request.nextUrl.searchParams
+      .get("propertyId")
+      ?.trim();
+    const where: Prisma.TourWhereInput = propertyId
+      ? { propertyId }
+      : {};
 
     if (user.role === "agent") {
       const agent = await db.agent.findUnique({
@@ -88,8 +152,12 @@ export async function GET(request: NextRequest) {
         where: { agentId: agent.id },
         select: { id: true },
       });
-      const propertyIds = assignedProperties.map((property) => property.id);
-      if (!propertyIds.length) return NextResponse.json({ tours: [] });
+      const propertyIds = assignedProperties.map(
+        (property) => property.id
+      );
+      if (!propertyIds.length) {
+        return NextResponse.json({ tours: [] });
+      }
       if (propertyId && !propertyIds.includes(propertyId)) {
         return NextResponse.json({ tours: [] });
       }
@@ -107,6 +175,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ tours });
   } catch (error) {
     console.error("Tours fetch error:", error);
-    return NextResponse.json({ error: "Failed to fetch tours" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch tours" },
+      { status: 500 }
+    );
   }
 }

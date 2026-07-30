@@ -1,6 +1,6 @@
 {
   "name": "estatepro",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "scripts": {
     "dev": "NODE_OPTIONS='--max-old-space-size=4096' bun server.ts 2>&1 | tee dev.log",
@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "check": "bun run db:generate && bunx prisma validate && bun run test && bun run typecheck && bun run lint && bun run build",
     "alerts:process": "bun scripts/process-property-alerts.ts",
+    "listings:publish": "bun scripts/publish-scheduled-listings.ts",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

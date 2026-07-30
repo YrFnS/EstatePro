@@ -7,6 +7,12 @@ import {
   buildPropertyWhere,
   getPropertyPagination,
 } from "@/lib/property-filters";
+import {
+  inferExternalMediaType,
+  normalizeExternalMediaUrl,
+} from "@/lib/property-media";
+import { validateListingForSubmission } from "@/lib/listing-lifecycle";
+import { resolveAgentForUser } from "@/lib/listing-access";
 
 const propertyInputSchema = z.object({
   titleEn: z.string().trim().min(2).max(160),
@@ -89,11 +95,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 }
+    );
   }
   if (!isStaffRole(user.role)) {
     return NextResponse.json(
-      { error: "Only agents and administrators can publish properties" },
+      { error: "Use the listing workspace to submit a property." },
       { status: 403 }
     );
   }
@@ -111,14 +120,46 @@ export async function POST(request: NextRequest) {
     }
 
     const input = parsed.data;
+    const mediaUrls = Array.from(
+      new Set(
+        input.images
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .map(normalizeExternalMediaUrl)
+      )
+    );
+    const issues = validateListingForSubmission({
+      ...input,
+      imageCount: mediaUrls.filter(
+        (url) => inferExternalMediaType(url) === "image"
+      ).length,
+    });
+    if (issues.length) {
+      return NextResponse.json(
+        { error: "The property is not ready to submit", issues },
+        { status: 400 }
+      );
+    }
 
-    if (input.agentId) {
-      const agentExists = await db.agent.count({ where: { id: input.agentId } });
+    let agentId = input.agentId || null;
+    if (user.role !== "admin") {
+      agentId = (await resolveAgentForUser(user))?.id || null;
+    } else if (agentId) {
+      const agentExists = await db.agent.count({
+        where: { id: agentId },
+      });
       if (!agentExists) {
-        return NextResponse.json({ error: "Agent not found" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Agent not found" },
+          { status: 400 }
+        );
       }
     }
 
+    const listingStatus =
+      user.role === "admin" ? "published" : "pending_review";
+    const now = new Date();
     const property = await db.property.create({
       data: {
         titleEn: input.titleEn,
@@ -137,7 +178,9 @@ export async function POST(request: NextRequest) {
         addressAr: input.addressAr,
         cityEn: input.cityEn,
         cityAr: input.cityAr,
-        images: input.images,
+        images: mediaUrls
+          .filter((url) => inferExternalMediaType(url) === "image")
+          .join(","),
         features: input.features,
         yearBuilt: input.yearBuilt ?? null,
         parking: input.parking,
@@ -147,16 +190,53 @@ export async function POST(request: NextRequest) {
         lng: input.lng ?? null,
         virtualTourUrl: input.virtualTourUrl || null,
         virtualTourImages: input.virtualTourImages || null,
-        agentId: input.agentId || null,
+        agentId,
+        ownerUserId: user.id,
+        createdByUserId: user.id,
+        reviewedByUserId: user.role === "admin" ? user.id : null,
+        listingStatus,
+        submittedAt: now,
+        reviewedAt: user.role === "admin" ? now : null,
+        publishedAt: user.role === "admin" ? now : null,
+        media: {
+          create: mediaUrls.map((url, index) => ({
+            url,
+            source: "external",
+            type: inferExternalMediaType(url),
+            sortOrder: index,
+            isCover:
+              index === 0 && inferExternalMediaType(url) === "image",
+          })),
+        },
+        auditLogs: {
+          create: {
+            actorUserId: user.id,
+            actorName: user.name,
+            action:
+              user.role === "admin"
+                ? "listing_created_and_published"
+                : "listing_created_and_submitted",
+            previousStatus: null,
+            newStatus: listingStatus,
+          },
+        },
       },
-      include: { agent: { select: agentSelect } },
+      include: {
+        agent: { select: agentSelect },
+        media: { orderBy: { sortOrder: "asc" } },
+      },
     });
 
     return NextResponse.json(property, { status: 201 });
   } catch (error) {
     console.error("Error creating property:", error);
     return NextResponse.json(
-      { error: "Failed to create property" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to create property",
+      },
       { status: 500 }
     );
   }

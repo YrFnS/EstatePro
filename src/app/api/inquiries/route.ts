@@ -30,32 +30,90 @@ export async function POST(request: NextRequest) {
     const parsed = inquirySchema.safeParse(await request.json());
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Invalid inquiry", details: parsed.error.flatten().fieldErrors },
+        {
+          error: "Invalid inquiry",
+          details: parsed.error.flatten().fieldErrors,
+        },
         { status: 400 }
       );
     }
 
     const input = parsed.data;
-    if (input.propertyId) {
-      const propertyExists = await db.property.count({ where: { id: input.propertyId } });
-      if (!propertyExists) {
-        return NextResponse.json({ error: "Property not found" }, { status: 404 });
-      }
+    const property = input.propertyId
+      ? await db.property.findFirst({
+          where: {
+            id: input.propertyId,
+            listingStatus: "published",
+          },
+          select: {
+            id: true,
+            titleEn: true,
+            titleAr: true,
+            ownerUserId: true,
+            agent: { select: { email: true } },
+          },
+        })
+      : null;
+
+    if (input.propertyId && !property) {
+      return NextResponse.json(
+        { error: "Property not found" },
+        { status: 404 }
+      );
     }
 
-    const inquiry = await db.inquiry.create({
-      data: {
-        name: input.name,
-        email: input.email.toLowerCase(),
-        phone: input.phone || null,
-        message: input.message,
-        propertyId: input.propertyId || null,
-      },
+    const inquiry = await db.$transaction(async (transaction) => {
+      const created = await transaction.inquiry.create({
+        data: {
+          name: input.name,
+          email: input.email.toLowerCase(),
+          phone: input.phone || null,
+          message: input.message,
+          propertyId: property?.id || null,
+        },
+      });
+
+      let recipientId = property?.ownerUserId || null;
+      if (!recipientId && property?.agent?.email) {
+        recipientId =
+          (
+            await transaction.user.findUnique({
+              where: {
+                email: property.agent.email.toLowerCase(),
+              },
+              select: { id: true },
+            })
+          )?.id || null;
+      }
+
+      if (recipientId && property) {
+        await transaction.userNotification.create({
+          data: {
+            userId: recipientId,
+            sourceId: `property-inquiry:${created.id}`,
+            type: "inquiry",
+            title: "New property inquiry",
+            message: `${input.name} asked about “${
+              property.titleEn || property.titleAr
+            }”.`,
+            actionUrl: `/my-listings?listing=${encodeURIComponent(
+              property.id
+            )}`,
+          },
+        });
+      }
+      return created;
     });
 
-    return NextResponse.json({ success: true, id: inquiry.id }, { status: 201 });
+    return NextResponse.json(
+      { success: true, id: inquiry.id },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Error saving inquiry:", error);
-    return NextResponse.json({ error: "Failed to send inquiry" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to send inquiry" },
+      { status: 500 }
+    );
   }
 }

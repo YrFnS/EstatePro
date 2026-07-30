@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ComponentType,
+} from "react";
 import {
   BarChart3,
   Brain,
@@ -8,6 +15,7 @@ import {
   Calendar,
   Calculator,
   ChevronDown,
+  ClipboardList,
   DollarSign,
   Globe,
   Heart,
@@ -18,6 +26,7 @@ import {
   Menu,
   MessageCircle,
   Moon,
+  Plus,
   Route,
   Scale,
   Settings,
@@ -36,7 +45,11 @@ import { useRouter, type View } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { AuthDialog } from "@/components/real-estate/auth-dialog";
 import { NotificationBell } from "@/components/real-estate/notification-bell";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -84,7 +97,11 @@ export function Navbar() {
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const subscribe = useCallback(() => () => {}, []);
-  const mounted = useSyncExternalStore(subscribe, () => true, () => false);
+  const mounted = useSyncExternalStore(
+    subscribe,
+    () => true,
+    () => false
+  );
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -120,10 +137,22 @@ export function Navbar() {
 
   const tools = useMemo<NavigationItem[]>(
     () => [
-      { label: t("common.calculator"), view: "calculator", icon: Calculator },
+      {
+        label: t("common.calculator"),
+        view: "calculator",
+        icon: Calculator,
+      },
       { label: t("commute.title"), view: "commute", icon: Route },
-      { label: t("aiRecommend.title"), view: "ai-recommend", icon: Brain },
-      { label: t("valuation.title"), view: "valuation", icon: DollarSign },
+      {
+        label: t("aiRecommend.title"),
+        view: "ai-recommend",
+        icon: Brain,
+      },
+      {
+        label: t("valuation.title"),
+        view: "valuation",
+        icon: DollarSign,
+      },
     ],
     [t]
   );
@@ -131,7 +160,9 @@ export function Navbar() {
   const isActive = (item: NavigationItem) => {
     if (view !== item.view) return false;
     if (!item.params) return true;
-    return Object.entries(item.params).every(([key, value]) => params[key] === value);
+    return Object.entries(item.params).every(
+      ([key, value]) => params[key] === value
+    );
   };
 
   const go = (item: NavigationItem) => {
@@ -146,14 +177,31 @@ export function Navbar() {
   };
 
   const accountItems: NavigationItem[] = [
-    { label: t("dashboard.title"), view: "dashboard", icon: LayoutDashboard },
-    { label: t("messaging.title"), view: "messaging", icon: MessageCircle },
+    {
+      label: t("dashboard.title"),
+      view: "dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      label: locale === "ar" ? "إعلاناتي" : "My Listings",
+      view: "my-listings",
+      icon: ClipboardList,
+    },
+    {
+      label: t("messaging.title"),
+      view: "messaging",
+      icon: MessageCircle,
+    },
     { label: t("tour.title"), view: "my-tours", icon: Calendar },
     { label: t("settings.title"), view: "settings", icon: Settings },
   ];
 
   if (user?.role === "admin") {
-    accountItems.push({ label: t("admin.title"), view: "admin", icon: Shield });
+    accountItems.push({
+      label: t("admin.title"),
+      view: "admin",
+      icon: Shield,
+    });
   }
 
   return (
@@ -176,10 +224,15 @@ export function Navbar() {
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
               <Home className="h-4 w-4" />
             </span>
-            <span className="text-lg font-bold tracking-tight">{t("common.appName")}</span>
+            <span className="text-lg font-bold tracking-tight">
+              {t("common.appName")}
+            </span>
           </button>
 
-          <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary navigation">
+          <nav
+            className="hidden items-center gap-1 lg:flex"
+            aria-label="Primary navigation"
+          >
             {mainNavigation.map((item) => (
               <button
                 type="button"
@@ -211,7 +264,11 @@ export function Navbar() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56">
                 {tools.map((item) => (
-                  <DropdownMenuItem key={item.view} onClick={() => go(item)} className="gap-2">
+                  <DropdownMenuItem
+                    key={item.view}
+                    onClick={() => go(item)}
+                    className="gap-2"
+                  >
                     <item.icon className="h-4 w-4" />
                     {item.label}
                   </DropdownMenuItem>
@@ -221,6 +278,18 @@ export function Navbar() {
           </nav>
 
           <div className="hidden items-center gap-1 lg:flex">
+            {isAuthenticated ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="me-1 gap-2"
+                onClick={() => navigate("list-property")}
+              >
+                <Plus className="h-4 w-4" />
+                {locale === "ar" ? "أضف عقاراً" : "List property"}
+              </Button>
+            ) : null}
+
             <Button
               variant="ghost"
               size="icon"
@@ -228,7 +297,12 @@ export function Navbar() {
               className="relative"
               aria-label={t("common.favorites")}
             >
-              <Heart className={cn("h-4 w-4", view === "favorites" && "fill-red-500 text-red-500")} />
+              <Heart
+                className={cn(
+                  "h-4 w-4",
+                  view === "favorites" && "fill-red-500 text-red-500"
+                )}
+              />
               {favoritesCount > 0 ? (
                 <Badge className="absolute -end-1 -top-1 h-4 min-w-4 justify-center rounded-full px-1 text-[9px]">
                   {favoritesCount > 9 ? "9+" : favoritesCount}
@@ -242,7 +316,12 @@ export function Navbar() {
               className="relative"
               aria-label={t("common.compare")}
             >
-              <Scale className={cn("h-4 w-4", view === "compare" && "text-primary")} />
+              <Scale
+                className={cn(
+                  "h-4 w-4",
+                  view === "compare" && "text-primary"
+                )}
+              />
               {compareCount > 0 ? (
                 <Badge className="absolute -end-1 -top-1 h-4 min-w-4 justify-center rounded-full px-1 text-[9px]">
                   {compareCount}
@@ -258,7 +337,11 @@ export function Navbar() {
               size="sm"
               onClick={() => setLocale(locale === "en" ? "ar" : "en")}
               className="gap-1.5"
-              aria-label={locale === "en" ? t("common.arabic") : t("common.english")}
+              aria-label={
+                locale === "en"
+                  ? t("common.arabic")
+                  : t("common.english")
+              }
             >
               <Globe className="h-4 w-4" />
               {locale === "en" ? "AR" : "EN"}
@@ -266,8 +349,14 @@ export function Navbar() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              aria-label={mounted && theme === "dark" ? t("common.lightMode") : t("common.darkMode")}
+              onClick={() =>
+                setTheme(theme === "dark" ? "light" : "dark")
+              }
+              aria-label={
+                mounted && theme === "dark"
+                  ? t("common.lightMode")
+                  : t("common.darkMode")
+              }
             >
               <Sun className="h-4 w-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
               <Moon className="absolute h-4 w-4 scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
@@ -278,33 +367,49 @@ export function Navbar() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="ms-1 gap-2 px-2">
                     <Avatar className="h-8 w-8">
-                      {user.avatar ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
+                      {user.avatar ? (
+                        <AvatarImage src={user.avatar} alt={user.name} />
+                      ) : null}
                       <AvatarFallback>{initials(user.name)}</AvatarFallback>
                     </Avatar>
-                    <span className="hidden max-w-28 truncate text-sm xl:block">{user.name}</span>
+                    <span className="hidden max-w-28 truncate text-sm xl:block">
+                      {user.name}
+                    </span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-60">
                   <DropdownMenuLabel>
                     <p className="truncate">{user.name}</p>
-                    <p className="truncate text-xs font-normal text-muted-foreground">{user.email}</p>
+                    <p className="truncate text-xs font-normal text-muted-foreground">
+                      {user.email}
+                    </p>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {accountItems.map((item) => (
-                    <DropdownMenuItem key={item.view} onClick={() => go(item)} className="gap-2">
+                    <DropdownMenuItem
+                      key={item.view}
+                      onClick={() => go(item)}
+                      className="gap-2"
+                    >
                       <item.icon className="h-4 w-4" />
                       {item.label}
                     </DropdownMenuItem>
                   ))}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive">
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    className="gap-2 text-destructive focus:text-destructive"
+                  >
                     <LogOut className="h-4 w-4" />
                     {t("auth.signOut")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button onClick={() => setAuthDialogOpen(true)} className="ms-1 gap-2">
+              <Button
+                onClick={() => setAuthDialogOpen(true)}
+                className="ms-1 gap-2"
+              >
                 <UserCircle className="h-4 w-4" />
                 {t("auth.signIn")}
               </Button>
@@ -319,7 +424,12 @@ export function Navbar() {
               className="relative"
               aria-label={t("common.favorites")}
             >
-              <Heart className={cn("h-4 w-4", view === "favorites" && "fill-red-500 text-red-500")} />
+              <Heart
+                className={cn(
+                  "h-4 w-4",
+                  view === "favorites" && "fill-red-500 text-red-500"
+                )}
+              />
               {favoritesCount > 0 ? (
                 <Badge className="absolute -end-0.5 -top-0.5 h-4 min-w-4 justify-center rounded-full px-1 text-[9px]">
                   {favoritesCount > 9 ? "9+" : favoritesCount}
@@ -333,7 +443,10 @@ export function Navbar() {
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side={dir === "rtl" ? "right" : "left"} className="w-[88vw] max-w-sm overflow-y-auto">
+              <SheetContent
+                side={dir === "rtl" ? "right" : "left"}
+                className="w-[88vw] max-w-sm overflow-y-auto"
+              >
                 <SheetHeader>
                   <SheetTitle className="flex items-center gap-2">
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -344,15 +457,23 @@ export function Navbar() {
                 </SheetHeader>
 
                 <div className="mt-6 space-y-6">
-                  <nav className="space-y-1" aria-label="Mobile navigation">
+                  <nav
+                    className="space-y-1"
+                    aria-label="Mobile navigation"
+                  >
                     {mainNavigation.map((item) => (
-                      <SheetClose asChild key={`${item.view}-${item.params?.status || ""}`}>
+                      <SheetClose
+                        asChild
+                        key={`${item.view}-${item.params?.status || ""}`}
+                      >
                         <button
                           type="button"
                           onClick={() => go(item)}
                           className={cn(
                             "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start text-sm font-medium",
-                            isActive(item) ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                            isActive(item)
+                              ? "bg-primary/10 text-primary"
+                              : "hover:bg-muted"
                           )}
                         >
                           <item.icon className="h-4 w-4" />
@@ -360,6 +481,16 @@ export function Navbar() {
                         </button>
                       </SheetClose>
                     ))}
+                    <SheetClose asChild>
+                      <button
+                        type="button"
+                        onClick={() => navigate("list-property")}
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start text-sm font-medium text-primary hover:bg-primary/10"
+                      >
+                        <Plus className="h-4 w-4" />
+                        {locale === "ar" ? "أضف عقاراً" : "List a property"}
+                      </button>
+                    </SheetClose>
                   </nav>
 
                   <div className="border-t pt-5">
@@ -384,18 +515,31 @@ export function Navbar() {
 
                   <div className="border-t pt-5">
                     <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {isAuthenticated ? t("dashboard.title") : t("auth.signIn")}
+                      {isAuthenticated
+                        ? t("dashboard.title")
+                        : t("auth.signIn")}
                     </p>
                     {isAuthenticated && user ? (
                       <>
                         <div className="mb-2 flex items-center gap-3 rounded-xl bg-muted/50 p-3">
                           <Avatar className="h-9 w-9">
-                            {user.avatar ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
-                            <AvatarFallback>{initials(user.name)}</AvatarFallback>
+                            {user.avatar ? (
+                              <AvatarImage
+                                src={user.avatar}
+                                alt={user.name}
+                              />
+                            ) : null}
+                            <AvatarFallback>
+                              {initials(user.name)}
+                            </AvatarFallback>
                           </Avatar>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold">{user.name}</p>
-                            <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                            <p className="truncate text-sm font-semibold">
+                              {user.name}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {user.email}
+                            </p>
                           </div>
                         </div>
                         {accountItems.map((item) => (
@@ -436,7 +580,9 @@ export function Navbar() {
                   <div className="grid grid-cols-2 gap-2 border-t pt-5">
                     <Button
                       variant="outline"
-                      onClick={() => setLocale(locale === "en" ? "ar" : "en")}
+                      onClick={() =>
+                        setLocale(locale === "en" ? "ar" : "en")
+                      }
                       className="gap-2"
                     >
                       <Globe className="h-4 w-4" />
@@ -444,11 +590,19 @@ export function Navbar() {
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                      onClick={() =>
+                        setTheme(theme === "dark" ? "light" : "dark")
+                      }
                       className="gap-2"
                     >
-                      {mounted && theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                      {mounted && theme === "dark" ? t("common.lightMode") : t("common.darkMode")}
+                      {mounted && theme === "dark" ? (
+                        <Sun className="h-4 w-4" />
+                      ) : (
+                        <Moon className="h-4 w-4" />
+                      )}
+                      {mounted && theme === "dark"
+                        ? t("common.lightMode")
+                        : t("common.darkMode")}
                     </Button>
                   </div>
                 </div>
@@ -458,7 +612,10 @@ export function Navbar() {
         </div>
       </header>
 
-      <AuthDialog open={authDialogOpen} onOpenChange={setAuthDialogOpen} />
+      <AuthDialog
+        open={authDialogOpen}
+        onOpenChange={setAuthDialogOpen}
+      />
     </>
   );
 }
