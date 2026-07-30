@@ -27,6 +27,7 @@ import {
   deleteStoredObject,
   isObjectStorageConfigured,
   ownsStorageKey,
+  publicUrlForStorageKey,
   validateUpload,
 } from "@/lib/object-storage";
 
@@ -233,6 +234,15 @@ export async function POST(
         );
       }
       const url = normalizeExternalMediaUrl(input.url);
+      const expectedUrl = normalizeExternalMediaUrl(
+        publicUrlForStorageKey(input.storageKey)
+      );
+      if (url !== expectedUrl) {
+        return NextResponse.json(
+          { error: "The uploaded media URL does not match its signed storage key." },
+          { status: 400 }
+        );
+      }
 
       const media = await db.$transaction(async (transaction) => {
         const sortOrder = await nextMediaSortOrder(transaction, id);
