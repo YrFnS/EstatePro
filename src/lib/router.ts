@@ -19,6 +19,8 @@ const routes = {
   favorites: "/favorites",
   compare: "/compare",
   "list-property": "/list-property",
+  "my-listings": "/my-listings",
+  "edit-listing": "/my-listings",
   "saved-searches": "/saved-searches",
   "ai-recommend": "/ai-recommend",
   valuation: "/valuation",
@@ -44,6 +46,10 @@ function getView(pathname: string): View {
   if (pathname === "/properties") return "properties";
   if (pathname.startsWith("/agents/")) return "agent-detail";
   if (pathname === "/agents") return "agents";
+  if (/^\/my-listings\/[^/]+\/edit\/?$/.test(pathname)) {
+    return "edit-listing";
+  }
+  if (pathname === "/my-listings") return "my-listings";
 
   const segment = pathname.slice(1).split("/")[0];
   return segment in routes ? (segment as View) : "home";
@@ -61,7 +67,11 @@ export function useRouter() {
       values[key] = value;
     });
 
-    if (view === "property-detail" || view === "agent-detail") {
+    if (
+      view === "property-detail" ||
+      view === "agent-detail" ||
+      view === "edit-listing"
+    ) {
       const id = pathname.split("/")[2];
       if (id) values.id = id;
     }
@@ -77,10 +87,18 @@ export function useRouter() {
         destination = `/properties/${encodeURIComponent(nextParams.id)}`;
       } else if (nextView === "agent-detail" && nextParams?.id) {
         destination = `/agents/${encodeURIComponent(nextParams.id)}`;
+      } else if (nextView === "edit-listing" && nextParams?.id) {
+        destination = `/my-listings/${encodeURIComponent(
+          nextParams.id
+        )}/edit`;
       } else if (nextParams) {
         const query = new URLSearchParams();
         Object.entries(nextParams).forEach(([key, value]) => {
-          if (value !== undefined && value !== null && String(value).trim() !== "") {
+          if (
+            value !== undefined &&
+            value !== null &&
+            String(value).trim() !== ""
+          ) {
             query.set(key, String(value));
           }
         });
@@ -90,7 +108,9 @@ export function useRouter() {
 
       router.push(destination);
       if (typeof window !== "undefined") {
-        window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+        window.requestAnimationFrame(() =>
+          window.scrollTo({ top: 0, behavior: "smooth" })
+        );
       }
     },
     [router]
