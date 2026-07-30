@@ -107,59 +107,53 @@ export async function PUT(
       }),
     ];
 
-    if (parsed.data.notificationsEnabled) {
-      if (existing.propertyAlert) {
-        if (filtersChanged) {
-          operations.push(
-            db.propertyAlertMatch.deleteMany({
-              where: {
-                alertId: existing.propertyAlert.id,
-              },
-            })
-          );
-        }
-
+    if (existing.propertyAlert) {
+      if (filtersChanged) {
         operations.push(
-          db.propertyAlert.update({
-            where: { id: existing.propertyAlert.id },
-            data: {
-              name,
-              filters: alertFilters,
-              enabled: true,
-              nextRunAt: now,
-              currentMatchCount: filtersChanged
-                ? 0
-                : existing.propertyAlert.currentMatchCount,
-              lastRunAt: filtersChanged
-                ? null
-                : existing.propertyAlert.lastRunAt,
-              lastMatchedAt: filtersChanged
-                ? null
-                : existing.propertyAlert.lastMatchedAt,
-              lastError: null,
-            },
-          })
-        );
-      } else {
-        operations.push(
-          db.propertyAlert.create({
-            data: {
-              userId: user.id,
-              savedSearchId: id,
-              name,
-              filters: alertFilters,
-              signature: `saved-search:${id}`,
-              frequency: "daily",
-              enabled: true,
-              nextRunAt: now,
+          db.propertyAlertMatch.deleteMany({
+            where: {
+              alertId: existing.propertyAlert.id,
             },
           })
         );
       }
-    } else if (existing.propertyAlert) {
+
       operations.push(
-        db.propertyAlert.delete({
+        db.propertyAlert.update({
           where: { id: existing.propertyAlert.id },
+          data: {
+            name,
+            filters: alertFilters,
+            enabled: parsed.data.notificationsEnabled,
+            nextRunAt: parsed.data.notificationsEnabled
+              ? now
+              : null,
+            currentMatchCount: filtersChanged
+              ? 0
+              : existing.propertyAlert.currentMatchCount,
+            lastRunAt: filtersChanged
+              ? null
+              : existing.propertyAlert.lastRunAt,
+            lastMatchedAt: filtersChanged
+              ? null
+              : existing.propertyAlert.lastMatchedAt,
+            lastError: null,
+          },
+        })
+      );
+    } else if (parsed.data.notificationsEnabled) {
+      operations.push(
+        db.propertyAlert.create({
+          data: {
+            userId: user.id,
+            savedSearchId: id,
+            name,
+            filters: alertFilters,
+            signature: `saved-search:${id}`,
+            frequency: "daily",
+            enabled: true,
+            nextRunAt: now,
+          },
         })
       );
     }
