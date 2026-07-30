@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { CurrentUser } from "@/lib/api-auth";
 
@@ -47,7 +48,8 @@ export async function findManagedListing(
   const isOwner = listing.ownerUserId === user.id;
   const isAssignedAgent =
     user.role === "agent" &&
-    listing.agent?.email.toLowerCase() === user.email.toLowerCase();
+    listing.agent?.email.toLowerCase() ===
+      user.email.toLowerCase();
 
   return isAdmin || isOwner || isAssignedAgent ? listing : null;
 }
@@ -66,7 +68,7 @@ export async function auditListing(input: {
   action: string;
   previousStatus?: string | null;
   newStatus?: string | null;
-  metadata?: Record<string, unknown>;
+  metadata?: Prisma.InputJsonObject;
 }) {
   return db.propertyAuditLog.create({
     data: {
@@ -76,7 +78,7 @@ export async function auditListing(input: {
       action: input.action,
       previousStatus: input.previousStatus || null,
       newStatus: input.newStatus || null,
-      metadata: input.metadata || undefined,
+      metadata: input.metadata,
     },
   });
 }
