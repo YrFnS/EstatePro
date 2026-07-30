@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ClipboardCheck } from "lucide-react";
 import { AdminDashboard } from "@/components/admin/admin-dashboard";
 
@@ -13,7 +14,22 @@ export const metadata: Metadata = {
   },
 };
 
-export default function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const query = await searchParams;
+  if (query.section === "moderation") {
+    const listing =
+      typeof query.listing === "string" ? query.listing : undefined;
+    redirect(
+      listing
+        ? `/admin/moderation?listing=${encodeURIComponent(listing)}`
+        : "/admin/moderation"
+    );
+  }
+
   return (
     <>
       <AdminDashboard />
