@@ -1,6 +1,6 @@
 # EstatePro
 
-EstatePro is a bilingual real-estate marketplace built with Next.js, React, TypeScript, Prisma, PostgreSQL, Tailwind CSS, and Socket.IO. It includes public property discovery, account features, authenticated messaging, tour scheduling, AI-assisted tools, and a protected administration dashboard.
+EstatePro is a bilingual real-estate marketplace built with Next.js, React, TypeScript, Prisma, PostgreSQL, Tailwind CSS, and Socket.IO. It includes public property discovery, synchronized account features, authenticated messaging, tour scheduling, scheduled property alerts, AI-assisted tools, and a protected administration dashboard.
 
 ## Current capabilities
 
@@ -17,10 +17,21 @@ EstatePro is a bilingual real-estate marketplace built with Next.js, React, Type
 
 - Credentials authentication through NextAuth
 - User registration with bcrypt password hashing
+- Cross-device favorites, comparison selections, saved searches, and notifications
 - Authenticated conversations and messages
 - Socket.IO room authorization based on database membership
 - Tour scheduling and account-scoped tour management
 - Agent and administrator access controls
+
+### Property alerts
+
+- Account-owned instant, daily, and weekly property alerts
+- Reuse of the same filters used by property search and map views
+- Saved searches can automatically create linked daily alerts
+- Scheduled matching with duplicate-safe property and notification records
+- Persistent notification delivery across devices
+- Manual alert refresh, pause, edit, delete, and match history
+- Scheduler support through GitHub Actions, a protected HTTP cron endpoint, or a direct worker command
 
 ### Administration
 
@@ -58,17 +69,18 @@ Property-image generation uses the configured Z AI SDK integration.
 | Maps | Leaflet and React Leaflet |
 | Forms and validation | React Hook Form and Zod |
 | Runtime | Bun |
-| Tests and validation | TypeScript, ESLint, Next.js production build through GitHub Actions |
+| Tests and validation | Bun tests, Prisma validation, TypeScript, ESLint, and Next.js production builds through GitHub Actions |
 
 ## Requirements
 
 - Bun 1.3.4 or newer
 - PostgreSQL
 - Node-compatible hosting capable of running a persistent Bun process and WebSocket connections
+- A scheduler for property-alert processing
 
 ## Environment variables
 
-Create `.env` in the repository root:
+Copy `.env.example` to `.env` and replace every development value:
 
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require"
@@ -79,6 +91,9 @@ NEXTAUTH_SECRET="replace-with-a-long-random-secret"
 # Optional separate signing secret for administrator sessions.
 # NEXTAUTH_SECRET is used as a fallback when this is omitted.
 ADMIN_AUTH_SECRET="replace-with-a-different-long-random-secret"
+
+# Required when an external scheduler calls /api/cron/property-alerts.
+CRON_SECRET="replace-with-a-scheduler-bearer-secret"
 
 # Optional canonical public URL used by the realtime server's origin allowlist.
 APP_URL="http://localhost:3000"
@@ -102,9 +117,11 @@ git clone <repository-url>
 cd EstatePro
 bun install
 bun run db:generate
-bun run db:push
+bun run db:deploy
 bun run dev
 ```
+
+For an empty development database where migration history is not required, `bun run db:push` remains available. Production and shared environments should use `bun run db:deploy`.
 
 Open `http://localhost:3000`.
 
@@ -115,12 +132,15 @@ Open `http://localhost:3000`.
 | `bun run dev` | Run the Next.js and Socket.IO development server |
 | `bun run build` | Create a production Next.js build |
 | `bun run start` | Run the production Bun server |
+| `bun run test` | Run Bun unit tests |
 | `bun run typecheck` | Run TypeScript without emitting files |
 | `bun run lint` | Run ESLint |
-| `bun run check` | Generate Prisma, type-check, lint, and build |
+| `bun run check` | Generate Prisma, validate the schema, test, type-check, lint, and build |
+| `bun run alerts:process` | Process due property alerts once |
 | `bun run db:generate` | Generate the Prisma client |
-| `bun run db:push` | Apply the current Prisma schema without a migration |
+| `bun run db:push` | Apply the current Prisma schema without migration history |
 | `bun run db:migrate` | Create and apply a development migration |
+| `bun run db:deploy` | Apply committed migrations in deployment environments |
 | `bun run db:reset` | Reset the configured database |
 
 ## Database initialization
@@ -140,6 +160,33 @@ bunx prisma studio
 
 Create the first administrator through a controlled database or deployment task. Store the password as a bcrypt hash and set the user's `role` to `admin`.
 
+## Property-alert scheduler
+
+Apply migrations before starting the scheduler:
+
+```bash
+bun run db:generate
+bun run db:deploy
+```
+
+Choose at least one execution method:
+
+1. Configure the repository Actions secret `DATABASE_URL`. `.github/workflows/property-alerts.yml` checks due alerts every 15 minutes.
+2. Configure `CRON_SECRET` and call the protected endpoint from an external scheduler:
+
+```text
+GET /api/cron/property-alerts?limit=250
+Authorization: Bearer <CRON_SECRET>
+```
+
+3. Run the worker command from a server cron or process manager:
+
+```bash
+ALERT_PROCESS_LIMIT=250 bun run alerts:process
+```
+
+Detailed behavior and operational notes are documented in `docs/property-alerts.md`.
+
 ## Security model
 
 - Public write endpoints validate request bodies and apply lightweight rate limits.
@@ -148,8 +195,11 @@ Create the first administrator through a controlled database or deployment task.
 - Message senders are derived from the authenticated session rather than request payloads.
 - Conversation reads, writes, Socket.IO joins, and broadcasts verify membership.
 - Tour records are scoped to the signed-in customer, assigned agent, or administrator.
+- Favorites, comparisons, searches, notifications, and alerts derive ownership from the authenticated session.
+- Property-alert cron execution requires `CRON_SECRET` when using the HTTP endpoint.
+- Alert matches and notifications use unique identifiers so scheduler retries are idempotent.
 - The service worker never caches API, admin, authentication, messaging, or account responses.
-- CI performs an unsuppressed TypeScript check before linting and building.
+- CI performs unsuppressed Prisma, test, TypeScript, lint, and production-build validation.
 
 The included in-memory rate limiter protects a single application instance. Multi-instance production deployments should replace it with a shared store such as Redis.
 
@@ -174,16 +224,18 @@ For multiple application instances, add a shared Socket.IO adapter and a distrib
 | `/agents` | Agent directory |
 | `/messaging` | Authenticated conversations |
 | `/my-tours` | Authenticated tour management |
-| `/favorites` | Device-local favorites |
-| `/saved-searches` | Account-namespaced browser saved searches |
-| `/compare` | Property comparison |
+| `/favorites` | Cross-device account favorites with guest fallback |
+| `/saved-searches` | Cross-device saved searches and optional linked alerts |
+| `/property-alerts` | Scheduled account property alerts and match history |
+| `/notifications` | Persistent account notifications |
+| `/compare` | Cross-device property comparison with guest fallback |
 | `/calculator` | Mortgage, affordability, and investment calculations |
 | `/market-insights` | Market data |
 | `/admin` | Protected administration dashboard |
 
-## Browser-local data
+## Account and guest state
 
-Favorites, comparison selections, notifications, and saved searches currently use browser storage. Saved searches are namespaced by the signed-in account to prevent one browser account from seeing another account's saved filters. Database synchronization across devices can be added in a later persistence phase.
+Signed-in users store favorites, comparison selections, saved searches, notifications, and property alerts in PostgreSQL. Existing guest browser state is imported after login where supported. Guests can continue using favorites, comparison, and saved-search features locally without being forced to create an account.
 
 ## Continuous integration
 
@@ -191,11 +243,13 @@ Pull requests run `.github/workflows/ci.yml`, which performs:
 
 1. Dependency installation
 2. Prisma client generation
-3. TypeScript checking
-4. ESLint
-5. A production Next.js build
+3. Prisma schema validation
+4. Bun unit tests
+5. TypeScript checking
+6. ESLint
+7. A production Next.js build
 
-A pull request should not be merged until this workflow succeeds and the deployment environment has valid PostgreSQL and authentication secrets.
+A pull request should not be merged until this workflow succeeds and the deployment environment has valid PostgreSQL, authentication, migration, and scheduler configuration.
 
 ## License
 
