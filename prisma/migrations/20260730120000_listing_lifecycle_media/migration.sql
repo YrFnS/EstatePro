@@ -154,7 +154,7 @@ SELECT
 FROM "Property" AS property
 CROSS JOIN LATERAL REGEXP_SPLIT_TO_TABLE(
   COALESCE(property."images", ''),
-  '\\s*,\\s*'
+  '[[:space:]]*,[[:space:]]*'
 ) WITH ORDINALITY AS media("url", "ordinality")
 WHERE TRIM(media."url") <> ''
 ON CONFLICT DO NOTHING;
