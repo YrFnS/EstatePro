@@ -9,7 +9,6 @@ import {
   Twitter,
   Instagram,
   Linkedin,
-  Youtube,
   Send,
   Phone,
   Mail,
@@ -129,10 +128,10 @@ export function Footer() {
 
             {/* Column 2: Quick Links */}
             <div className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-[hsl(38,15%,50%)]">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-[hsl(38,15%,62%)]">
                 {t("footer.quickLinks")}
               </h3>
-              <nav className="flex flex-col gap-2">
+              <nav aria-label={t("footer.quickLinks")} className="flex flex-col gap-2">
                 {quickLinks.map((link) => (
                   <button
                     key={link.view}
@@ -149,10 +148,10 @@ export function Footer() {
 
             {/* Column 3: Popular Cities */}
             <div className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-[hsl(38,15%,50%)]">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-[hsl(38,15%,62%)]">
                 {t("footer.popularCities")}
               </h3>
-              <nav className="flex flex-col gap-2">
+              <nav aria-label={t("footer.popularCities")} className="flex flex-col gap-2">
                 {popularCities.map((city) => (
                   <button
                     key={city.name}
@@ -170,7 +169,7 @@ export function Footer() {
 
             {/* Column 4: Contact Us */}
             <div className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-[hsl(38,15%,50%)]">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-[hsl(38,15%,62%)]">
                 {t("footer.contactInfo")}
               </h3>
               <div className="space-y-3 text-sm text-[hsl(38,20%,65%)]">
@@ -208,7 +207,7 @@ export function Footer() {
 
             {/* Column 5: Newsletter */}
             <div className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-[hsl(38,15%,50%)]">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-[hsl(38,15%,62%)]">
                 {t("footer.newsletter")}
               </h3>
               <p className="text-sm text-[hsl(38,20%,65%)] leading-relaxed">
@@ -239,7 +238,7 @@ export function Footer() {
                   </Button>
                 </div>
               </form>
-              <p className="text-xs text-[hsl(215,10%,35%)]">
+              <p className="text-xs text-[hsl(215,10%,57%)]">
                 {t("footer.noSpam")}
               </p>
             </div>

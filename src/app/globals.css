@@ -127,7 +127,7 @@
   --secondary: hsl(220, 14%, 18%);
   --secondary-foreground: hsl(38, 30%, 90%);
   --muted: hsl(220, 14%, 18%);
-  --muted-foreground: hsl(220, 10%, 55%);
+  --muted-foreground: hsl(220, 10%, 56%);
   /* Same warm gold accent in dark mode */
   --accent: hsl(38, 90%, 55%);
   --accent-foreground: hsl(215, 20%, 15%);

@@ -58,7 +58,10 @@ export function InstallPwaBanner() {
   if (!showBanner) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-80 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
+    <aside
+      aria-label={t("pwa.installTitle")}
+      className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-80 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300"
+    >
       <div className="rounded-xl border border-border bg-card p-4 shadow-xl">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#D4A853]/10">
@@ -74,7 +77,7 @@ export function InstallPwaBanner() {
             <div className="mt-3 flex items-center gap-2">
               <button
                 onClick={handleInstall}
-                className="inline-flex items-center gap-1.5 rounded-md bg-[#D4A853] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#C49A48] transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-md bg-[#D4A853] px-3 py-1.5 text-xs font-medium text-[#1F252E] hover:bg-[#C49A48] transition-colors"
               >
                 <Download className="h-3.5 w-3.5" />
                 {t("pwa.installButton")}
@@ -96,6 +99,6 @@ export function InstallPwaBanner() {
           </button>
         </div>
       </div>
-    </div>
+    </aside>
   );
 }

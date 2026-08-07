@@ -64,7 +64,16 @@ function normalizeNotification(
 ): Notification | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
-  const type = record.type;
+  const type =
+    record.type === "property_alert"
+      ? "search"
+      : record.type === "tour"
+        ? "inquiry"
+        : ["property", "price", "search", "system", "inquiry"].includes(
+            String(record.type),
+          )
+          ? (record.type as NotificationType)
+          : "system";
   const title =
     typeof record.title === "string"
       ? record.title.trim()
@@ -74,19 +83,7 @@ function normalizeNotification(
       ? record.message.trim()
       : "";
 
-  if (
-    ![
-      "property",
-      "price",
-      "search",
-      "system",
-      "inquiry",
-    ].includes(String(type)) ||
-    !title ||
-    !message
-  ) {
-    return null;
-  }
+  if (!title || !message) return null;
 
   return {
     id:

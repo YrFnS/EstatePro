@@ -89,6 +89,14 @@ function PriceChart({ dataPoints }: { dataPoints: { label: string; value: number
   const labels = dataPoints.map((d) => d.label);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
+  if (!dataPoints.length) {
+    return (
+      <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">
+        No market data available
+      </div>
+    );
+  }
+
   const width = 700;
   const height = 250;
   const paddingX = 40;
@@ -99,7 +107,7 @@ function PriceChart({ dataPoints }: { dataPoints: { label: string; value: number
   const minVal = Math.min(...values) - 10;
   const maxVal = Math.max(...values) + 10;
 
-  const getX = (i: number) => paddingX + (i / (values.length - 1)) * chartWidth;
+  const getX = (i: number) => paddingX + (i / Math.max(values.length - 1, 1)) * chartWidth;
   const getY = (val: number) => paddingY + chartHeight - ((val - minVal) / (maxVal - minVal)) * chartHeight;
 
   const linePoints = values.map((val, i) => `${getX(i)},${getY(val)}`).join(" ");
