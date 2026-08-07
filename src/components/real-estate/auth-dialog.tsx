@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -148,9 +149,9 @@ export function AuthDialog({
                 ? t("auth.welcomeBack")
                 : t("auth.welcomeNew")}
             </DialogTitle>
-            <p className="text-center text-sm text-muted-foreground">
+            <DialogDescription className="text-center">
               {activeTab === "login" ? t("auth.loginDesc") : t("auth.registerDesc")}
-            </p>
+            </DialogDescription>
           </DialogHeader>
         </div>
 

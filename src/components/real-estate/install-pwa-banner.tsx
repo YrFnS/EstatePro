@@ -23,6 +23,7 @@ export function InstallPwaBanner() {
 
     const handler = (e: Event) => {
       e.preventDefault();
+      if (localStorage.getItem("estatepro-install-dismissed") === "true") return;
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setShowBanner(true);
     };
@@ -50,6 +51,7 @@ export function InstallPwaBanner() {
 
   const handleDismiss = () => {
     localStorage.setItem("estatepro-install-dismissed", "true");
+    setDeferredPrompt(null);
     setShowBanner(false);
   };
 
