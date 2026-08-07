@@ -104,6 +104,20 @@ export function normalizePropertyAlertFilters(
   return normalized;
 }
 
+export function hasInvalidPropertyAlertRange(
+  filters: PropertyAlertFilters
+): boolean {
+  return ([
+    ["minPrice", "maxPrice"],
+    ["minArea", "maxArea"],
+  ] as const).some(
+    ([minimum, maximum]) =>
+      filters[minimum] !== undefined &&
+      filters[maximum] !== undefined &&
+      Number(filters[minimum]) > Number(filters[maximum])
+  );
+}
+
 export function propertyAlertSignature(
   name: string,
   filters: PropertyAlertFilters,

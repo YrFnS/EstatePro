@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, unauthorized } from "@/lib/api-auth";
 import { listPropertyAlerts } from "@/lib/property-alert-records";
 import {
+  hasInvalidPropertyAlertRange,
   MAX_PROPERTY_ALERTS,
   normalizePropertyAlertFilters,
   normalizePropertyAlertFrequency,
@@ -92,6 +93,12 @@ export async function POST(request: NextRequest) {
     if (!incoming.length) {
       return NextResponse.json(
         { error: "Choose at least one alert criterion" },
+        { status: 400 }
+      );
+    }
+    if (incoming.some((item) => hasInvalidPropertyAlertRange(item.filters))) {
+      return NextResponse.json(
+        { error: "Minimum values cannot exceed maximum values" },
         { status: 400 }
       );
     }

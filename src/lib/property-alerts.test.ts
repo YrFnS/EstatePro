@@ -1,6 +1,7 @@
 /// <reference types="bun-types" />
 import { describe, expect, test } from "bun:test";
 import {
+  hasInvalidPropertyAlertRange,
   nextPropertyAlertRun,
   normalizeLegacyPropertyAlert,
   normalizePropertyAlertFilters,
@@ -27,6 +28,11 @@ describe("property alert filters", () => {
       bedrooms: "3",
       minPrice: "250000",
     });
+  });
+
+  test("rejects inverted price and area ranges", () => {
+    expect(hasInvalidPropertyAlertRange({ minPrice: "1000", maxPrice: "500" })).toBe(true);
+    expect(hasInvalidPropertyAlertRange({ minArea: "500", maxArea: "1000" })).toBe(false);
   });
 
   test("builds stable signatures", () => {

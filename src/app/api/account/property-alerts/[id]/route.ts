@@ -14,6 +14,7 @@ import {
   serializePropertyAlert,
 } from "@/lib/property-alert-records";
 import {
+  hasInvalidPropertyAlertRange,
   normalizePropertyAlertFilters,
   normalizePropertyAlertFrequency,
   propertyAlertSignature,
@@ -75,6 +76,12 @@ export async function PATCH(
     if (!Object.keys(filters).length) {
       return NextResponse.json(
         { error: "Choose at least one alert criterion" },
+        { status: 400 }
+      );
+    }
+    if (hasInvalidPropertyAlertRange(filters)) {
+      return NextResponse.json(
+        { error: "Minimum values cannot exceed maximum values" },
         { status: 400 }
       );
     }
