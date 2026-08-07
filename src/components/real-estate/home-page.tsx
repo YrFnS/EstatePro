@@ -27,6 +27,7 @@ import { TestimonialCarousel } from "@/components/real-estate/testimonial-carous
 import { RecentlyViewedSection } from "@/components/real-estate/recently-viewed-section";
 import { SmartSearchBar } from "@/components/real-estate/smart-search-bar";
 import { useEffect, useState, useMemo } from "react";
+import { MEDIA_ASSETS } from "@/lib/media-assets";
 
 // Icon mapping for property type configs from DB
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -508,7 +509,10 @@ export function HomePage() {
       {/* ====== 1. Hero Section — Atmospheric Photography + Bold Typography ====== */}
       <section className="relative overflow-hidden min-h-[85dvh] flex items-center">
         {/* Background image */}
-        <div className="absolute inset-0 bg-[url('/hero-image.png')] bg-cover bg-center" />
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url("${MEDIA_ASSETS.hero}")` }}
+        />
         {/* Animated gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-br from-foreground/80 via-foreground/70 to-foreground/60 animate-hero-gradient" />
 
@@ -989,7 +993,7 @@ export function HomePage() {
                       style={{
                         backgroundImage: nb.image
                           ? `url('${nb.image}')`
-                          : "url('/hero-image.png')",
+                          : `url("${MEDIA_ASSETS.hero}")`,
                       }}
                     />
                     {/* Subtle dark gradient for text readability */}

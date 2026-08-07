@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fadeUp } from "@/components/real-estate/types/animations";
 import { Property } from "@/components/real-estate/types/property";
+import { MEDIA_ASSETS } from "@/lib/media-assets";
 
 interface SavedPropertiesQuickViewProps {
   properties: Property[];
@@ -51,7 +52,7 @@ export function SavedPropertiesQuickView({ properties, favoritesCount }: SavedPr
               {properties.map((property) => {
                 const title = locale === "ar" ? property.titleAr : property.titleEn;
                 const imageList = property.images ? property.images.split(",") : [];
-                const mainImage = imageList[0] || `https://placehold.co/400x300/e2e8f0/64748b?text=${encodeURIComponent(property.type)}`;
+                const mainImage = imageList[0] || MEDIA_ASSETS.propertyFallback;
 
                 return (
                   <motion.div

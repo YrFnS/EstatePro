@@ -21,6 +21,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useState, useRef } from "react";
+import { MEDIA_ASSETS } from "@/lib/media-assets";
 
 /* ─── Icon name → component mapping ─── */
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -409,7 +410,10 @@ export function AboutPage() {
     <div>
       {/* Hero Section */}
       <section className="relative bg-foreground text-background py-20 md:py-28 overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://placehold.co/1920x600/065f46/065f46?text=')] bg-cover bg-center opacity-15" />
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-15"
+          style={{ backgroundImage: `url("${MEDIA_ASSETS.aboutHero}")` }}
+        />
         {/* Decorative circles */}
         <div className="absolute -top-20 -end-20 w-72 h-72 rounded-full bg-white/5" />
         <div className="absolute -bottom-16 -start-16 w-56 h-56 rounded-full bg-white/5" />

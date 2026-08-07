@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/lib/i18n/provider";
+import { MEDIA_ASSETS } from "@/lib/media-assets";
 
 interface PropertyGalleryProps {
   images: string[];
@@ -47,7 +48,7 @@ export function PropertyGallery({
   const currentImage =
     imageList.length > 0
       ? imageList[currentIndex]
-      : "https://placehold.co/1200x800/e2e8f0/64748b?text=No+Image";
+      : MEDIA_ASSETS.propertyFallback;
 
   // === Callbacks (declared before effects that use them) ===
 
@@ -263,7 +264,7 @@ export function PropertyGallery({
               />
             ) : (
               <img
-                src="https://placehold.co/1200x800/e2e8f0/64748b?text=No+Image"
+                src={MEDIA_ASSETS.propertyFallback}
                 alt={title}
                 className="w-full h-full object-cover"
               />
@@ -512,8 +513,7 @@ export function PropertyGallery({
                 <motion.img
                   key={lightboxIndex}
                   src={
-                    imageList[lightboxIndex] ||
-                    "https://placehold.co/1200x800/e2e8f0/64748b?text=No+Image"
+                    imageList[lightboxIndex] || MEDIA_ASSETS.propertyFallback
                   }
                   alt={`${title} - ${lightboxIndex + 1}`}
                   className="max-h-[85vh] object-contain transition-transform duration-200"

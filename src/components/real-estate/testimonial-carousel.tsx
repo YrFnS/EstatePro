@@ -1,6 +1,7 @@
 "use client";
 
 import { useI18n } from "@/lib/i18n/provider";
+import { MEDIA_ASSETS } from "@/lib/media-assets";
 import { Star, Quote } from "lucide-react";
 import {
   Carousel,
@@ -123,7 +124,7 @@ export function TestimonialCarousel() {
                   </div>
                   <div className="flex items-center gap-3 pt-3 border-t border-border/50">
                     <img
-                      src={testimonial.avatar}
+                      src={testimonial.avatar || MEDIA_ASSETS.avatarFallback}
                       alt={locale === "ar" ? testimonial.authorAr : testimonial.authorEn}
                       className="w-10 h-10 rounded-full object-cover ring-2 ring-background shadow-sm"
                     />

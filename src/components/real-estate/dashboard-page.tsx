@@ -43,6 +43,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
 import type { Property } from "@/components/real-estate/types/property";
+import { MEDIA_ASSETS } from "@/lib/media-assets";
 
 interface Activity {
   id: string;
@@ -466,7 +467,7 @@ export function DashboardPage() {
                       {favoriteProperties.map((property) => {
                         const title = locale === "ar" ? property.titleAr : property.titleEn;
                         const imageList = property.images ? property.images.split(",") : [];
-                        const mainImage = imageList[0] || `https://placehold.co/400x300/e2e8f0/64748b?text=${encodeURIComponent(property.type)}`;
+                        const mainImage = imageList[0] || MEDIA_ASSETS.propertyFallback;
 
                         return (
                           <motion.div

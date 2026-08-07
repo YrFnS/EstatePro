@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PropertyCard } from "@/components/real-estate/property-card";
 import { ScheduleTourDialog } from "@/components/real-estate/schedule-tour-dialog";
+import { MEDIA_ASSETS } from "@/lib/media-assets";
 
 interface PropertySidebarProps {
   property: Property;
@@ -53,7 +54,7 @@ export function PropertySidebar({
             <span className="editorial-label">{t("propertyDetail.contactAgent")}</span>
             <div className="flex items-center gap-3 mt-3">
               <img
-                src={agent.image || `https://placehold.co/80x80/e2e8f0/64748b?text=Agent`}
+                src={agent.image || MEDIA_ASSETS.avatarFallback}
                 alt={locale === "ar" ? agent.nameAr : agent.nameEn}
                 className="w-12 h-12 rounded-full object-cover"
               />

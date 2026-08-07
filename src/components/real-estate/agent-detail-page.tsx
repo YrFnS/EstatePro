@@ -37,6 +37,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PropertyCard } from "@/components/real-estate/property-card";
 import { toast } from "sonner";
+import { MEDIA_ASSETS } from "@/lib/media-assets";
 
 interface Agent {
   id: string;
@@ -273,7 +274,7 @@ export function AgentDetailPage() {
                 <img
                   src={
                     agent.image ||
-                    `https://placehold.co/400x400/e2e8f0/64748b?text=${encodeURIComponent(getAgentName(agent))}`
+                    MEDIA_ASSETS.avatarFallback
                   }
                   alt={getAgentName(agent)}
                   className="w-full h-full object-cover"

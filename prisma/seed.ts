@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
+import { MEDIA_ASSETS } from "../src/lib/media-assets";
 
 if (process.env.SEED_DATABASE !== "estatepro-demo") {
   throw new Error("Set SEED_DATABASE=estatepro-demo to confirm the demo-data reset.");
@@ -381,7 +382,7 @@ try {
       ] });
       await tx.testimonial.createMany({ data: [
         { id: "testimonial-featured", authorEn: "Fatima Al-Nouri", authorAr: "فاطمة النوري", roleEn: "Home buyer", roleAr: "مشتري منزل", contentEn: "The bilingual guidance made our purchase simple.", contentAr: "جعلت الإرشادات ثنائية اللغة عملية الشراء سهلة.", avatar: image("photo-1534528741775-53994a69daeb"), rating: 5, featured: true, sortOrder: 1 },
-        { id: "testimonial-critical", authorEn: "David Lee", authorAr: "ديفيد لي", roleEn: "Renter", roleAr: "مستأجر", contentEn: "Useful filters, though I wanted more viewing times.", contentAr: "مرشحات مفيدة، لكنني رغبت في أوقات مشاهدة أكثر.", rating: 3, featured: false, sortOrder: 2 },
+        { id: "testimonial-critical", authorEn: "David Lee", authorAr: "ديفيد لي", roleEn: "Renter", roleAr: "مستأجر", contentEn: "Useful filters, though I wanted more viewing times.", contentAr: "مرشحات مفيدة، لكنني رغبت في أوقات مشاهدة أكثر.", avatar: MEDIA_ASSETS.avatarFallback, rating: 3, featured: false, sortOrder: 2 },
       ] });
       await tx.neighborhood.createMany({ data: [
         { id: "neighborhood-downtown", nameEn: "Downtown Dubai", nameAr: "وسط مدينة دبي", descEn: "Walkable towers, restaurants, and direct metro access.", descAr: "أبراج ومطاعم ومسارات مشاة مع وصول مباشر للمترو.", avgPrice: "AED 1.2M", propertyCount: 145, searchQuery: "Downtown Dubai", image: image("photo-1512453979798-5ea266f8880c"), featured: true, sortOrder: 1 },

@@ -1,3 +1,5 @@
+import { MEDIA_ASSETS } from "@/lib/media-assets";
+
 // ============================================================================
 // Settings Helper Module
 // Provides SERVER-SIDE functions to fetch SiteSetting values from Prisma and a
@@ -23,7 +25,7 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   hero_stat_properties_sold: "12K+",
   hero_stat_customer_rating: "98%",
   hero_stat_expert_agents: "250+",
-  hero_image: "/hero-image.png",
+  hero_image: MEDIA_ASSETS.hero,
   testimonial_quote_en:
     "EstatePro made finding our dream home an absolute breeze. The search tools are incredibly intuitive and the agents were super helpful throughout the entire process.",
   testimonial_quote_ar:
@@ -51,8 +53,7 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   mortgage_default_rate: "6.5",
   mortgage_default_term: "30",
   mortgage_default_down: "20",
-  placeholder_image:
-    "https://placehold.co/800x600/e2e8f0/64748b?text=No+Image",
+  placeholder_image: MEDIA_ASSETS.propertyFallback,
 };
 
 /** Get a single English setting value by key (server-side only). */

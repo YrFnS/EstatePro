@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { MEDIA_ASSETS } from "@/lib/media-assets";
 
 interface Agent {
   id: string;
@@ -282,7 +283,7 @@ export function AgentsPage() {
                             <img
                               src={
                                 agent.image ||
-                                `https://placehold.co/200x200/e2e8f0/64748b?text=${encodeURIComponent(getAgentName(agent))}`
+                                MEDIA_ASSETS.avatarFallback
                               }
                               alt={getAgentName(agent)}
                               className="w-full h-full object-cover"
