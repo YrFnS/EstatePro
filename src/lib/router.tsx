@@ -16,6 +16,8 @@ const routes = {
   favorites: "/favorites",
   compare: "/compare",
   "list-property": "/list-property",
+  "my-listings": "/my-listings",
+  "edit-listing": "/my-listings",
   "saved-searches": "/saved-searches",
   "ai-recommend": "/ai-recommend",
   valuation: "/valuation",
@@ -46,6 +48,8 @@ export function useRouter() {
         nextRouter.push(`/properties/${params.id}`);
       } else if (view === "agent-detail" && params?.id) {
         nextRouter.push(`/agents/${params.id}`);
+      } else if (view === "edit-listing" && params?.id) {
+        nextRouter.push(`/my-listings/${params.id}/edit`);
       } else if (view === "admin") {
         window.open("/admin", "_blank");
       } else if (params && Object.keys(params).length > 0) {
@@ -92,6 +96,8 @@ export function useRouter() {
     view = "admin";
   } else if (pathname === "/messaging") {
     view = "messaging";
+  } else if (pathname.startsWith("/my-listings/") && pathname.endsWith("/edit")) {
+    view = "edit-listing";
   } else {
     const segment = pathname.slice(1);
     if (segment in routes) {
@@ -106,7 +112,7 @@ export function useRouter() {
     const id = pathname.split("/")[2];
     if (id) params.id = id;
   }
-  if (view === "agent-detail") {
+  if (view === "agent-detail" || view === "edit-listing") {
     const id = pathname.split("/")[2];
     if (id) params.id = id;
   }

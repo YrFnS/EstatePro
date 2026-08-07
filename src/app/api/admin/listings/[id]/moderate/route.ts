@@ -34,7 +34,10 @@ function adminSession(request: NextRequest) {
   );
 }
 
-function targetStatus(input: z.infer<typeof moderationSchema>): ListingStatus {
+function targetStatus(
+  input: z.infer<typeof moderationSchema>,
+  previousStatus: ListingStatus
+): ListingStatus {
   switch (input.action) {
     case "approve":
       return "published";
@@ -47,7 +50,7 @@ function targetStatus(input: z.infer<typeof moderationSchema>): ListingStatus {
     case "archive":
       return "archived";
     case "reopen":
-      return "pending_review";
+      return previousStatus === "archived" ? "draft" : "pending_review";
   }
 }
 
@@ -124,7 +127,7 @@ export async function POST(
     const previousStatus = normalizeListingStatus(
       listing.listingStatus
     );
-    const nextStatus = targetStatus(parsed.data);
+    const nextStatus = targetStatus(parsed.data, previousStatus);
     if (!canAdminTransition(previousStatus, nextStatus)) {
       return NextResponse.json(
         {
