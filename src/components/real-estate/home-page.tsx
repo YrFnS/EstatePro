@@ -572,7 +572,7 @@ export function HomePage() {
                 <div className="bg-white/10 backdrop-blur-lg border border-white/15 rounded-2xl p-3 shadow-lg">
                   <div className="flex flex-wrap items-center justify-center gap-2">
                     <Select value={propertyType} onValueChange={setPropertyType}>
-                      <SelectTrigger className="w-[130px] h-8 text-xs bg-white/10 border-white/15 text-white/70">
+<SelectTrigger aria-label={t("hero.anyType")} className="w-[130px] h-8 text-xs bg-white/10 border-white/15 text-white/70">
                         <SelectValue placeholder={t("hero.anyType")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -586,7 +586,7 @@ export function HomePage() {
                       </SelectContent>
                     </Select>
                     <Select value={status} onValueChange={setStatus}>
-                      <SelectTrigger className="w-[110px] h-8 text-xs bg-white/10 border-white/15 text-white/70">
+<SelectTrigger aria-label={t("common.all")} className="w-[110px] h-8 text-xs bg-white/10 border-white/15 text-white/70">
                         <SelectValue placeholder={t("common.all")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -596,7 +596,7 @@ export function HomePage() {
                       </SelectContent>
                     </Select>
                     <Select value={priceRange} onValueChange={setPriceRange}>
-                      <SelectTrigger className="w-[130px] h-8 text-xs bg-white/10 border-white/15 text-white/70">
+<SelectTrigger aria-label={t("hero.priceRange")} className="w-[130px] h-8 text-xs bg-white/10 border-white/15 text-white/70">
                         <SelectValue placeholder={t("hero.priceRange")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -608,7 +608,7 @@ export function HomePage() {
                       </SelectContent>
                     </Select>
                     <Select value={bedrooms} onValueChange={setBedrooms}>
-                      <SelectTrigger className="w-[90px] h-8 text-xs bg-white/10 border-white/15 text-white/70">
+<SelectTrigger aria-label={t("hero.anyBeds")} className="w-[90px] h-8 text-xs bg-white/10 border-white/15 text-white/70">
                         <SelectValue placeholder={t("hero.anyBeds")} />
                       </SelectTrigger>
                       <SelectContent>

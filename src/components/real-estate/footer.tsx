@@ -185,7 +185,7 @@ export function Footer() {
                     ))}
                   </span>
                 </address>
-                <p className="flex items-center gap-2">
+                {phone ? <p className="flex items-center gap-2">
                   <Phone className="w-4 h-4 shrink-0 text-[hsl(38,15%,45%)]" />
                   <a
                     href={`tel:${phone.replace(/[^+\d]/g, "")}`}
@@ -193,7 +193,7 @@ export function Footer() {
                   >
                     {phone}
                   </a>
-                </p>
+                </p> : null}
                 <p className="flex items-center gap-2">
                   <Mail className="w-4 h-4 shrink-0 text-[hsl(38,15%,45%)]" />
                   <a
@@ -226,6 +226,7 @@ export function Footer() {
                   />
                   <Button
                     type="submit"
+                    aria-label={locale === "ar" ? "الاشتراك في النشرة البريدية" : "Subscribe to newsletter"}
                     disabled={subscribing}
                     size="sm"
                     className="h-10 px-5 bg-[var(--gold)] hover:bg-[var(--gold-hover)] text-[var(--gold-foreground)] shrink-0 transition-all duration-200 hover:shadow-lg hover:shadow-[var(--gold)]/20"
@@ -248,7 +249,7 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="border-t border-[hsl(215,15%,22%)]">
           <div className="container mx-auto px-4 py-6">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[hsl(215,10%,45%)]">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[hsl(215,10%,65%)]">
               <p>
                 © {new Date().getFullYear()} {t("common.appName")}.{" "}
                 {t("footer.rights")}

@@ -155,8 +155,8 @@
   --gold: hsl(38, 90%, 55%);
   --gold-foreground: hsl(215, 20%, 15%);
   --gold-hover: hsl(38, 92%, 48%);
-  --charcoal: hsl(38, 30%, 85%);
-  --charcoal-light: hsl(38, 25%, 75%);
+  --charcoal: hsl(215, 20%, 15%);
+  --charcoal-light: hsl(215, 18%, 25%);
   --warm-gray: hsl(220, 14%, 18%);
 }
 
