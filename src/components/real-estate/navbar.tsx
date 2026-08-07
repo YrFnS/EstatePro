@@ -64,6 +64,7 @@ import {
   Sheet,
   SheetClose,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -454,6 +455,9 @@ export function Navbar() {
                     </span>
                     {t("common.appName")}
                   </SheetTitle>
+                  <SheetDescription className="sr-only">
+                    Browse EstatePro navigation, account, and language options.
+                  </SheetDescription>
                 </SheetHeader>
 
                 <div className="mt-6 space-y-6">

@@ -40,6 +40,7 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -455,6 +456,9 @@ export function PropertiesPage() {
         <SheetContent side={locale === "ar" ? "right" : "left"} className="w-[90vw] max-w-sm overflow-y-auto">
           <SheetHeader className="mb-6">
             <SheetTitle>{t("common.filter")}</SheetTitle>
+            <SheetDescription className="sr-only">
+              Refine the visible property results.
+            </SheetDescription>
           </SheetHeader>
           <PropertyFilterPanel {...filterPanelProps} />
           <Button className="mt-8 w-full" onClick={() => setMobileFiltersOpen(false)}>
