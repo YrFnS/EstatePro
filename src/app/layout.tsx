@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "EstatePro" }],
   icons: {
-    icon: "/logo.svg",
+    icon: "/icons/icon-192x192.png",
     apple: "/icons/icon-192x192.png",
   },
   manifest: "/manifest.json",
