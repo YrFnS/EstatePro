@@ -25,6 +25,16 @@ def wait_for_visible(page, locator, timeout_ms=10_000):
     return None
 
 
+def wait_for_hydration(page, timeout_ms=15_000):
+    page.locator("html[data-estatepro-hydrated='true']").wait_for(
+        state="attached",
+        timeout=timeout_ms,
+    )
+    # Let effects released by the coordinator finish their first commit before
+    # the test reads runtime signals or starts another document navigation.
+    page.wait_for_timeout(100)
+
+
 def patched_request_failed(self, request):
     if not request.url.startswith(suite.BASE_URL):
         return
@@ -60,17 +70,15 @@ def patched_visit(
     suite.require(response is not None, f"No document response for {path}")
     suite.require(response.status < 400, f"{path} returned {response.status}")
     page.locator("body").wait_for(state="visible")
+    wait_for_hydration(page)
 
-    # Authenticated workspaces often validate their protected session after
-    # the document has loaded. Wait for their stable page marker rather than
-    # treating the intentional loading state as missing content.
+    # Authenticated workspaces can perform a protected data request after the
+    # shared shell is hydrated. Wait for their stable marker when supplied.
     if expected_text:
         page.get_by_text(expected_text, exact=False).first.wait_for(
             state="visible",
             timeout=15_000,
         )
-    else:
-        page.wait_for_timeout(700)
 
     body_text = page.locator("body").inner_text()
     suite.require(
@@ -109,6 +117,7 @@ def patched_visit(
 def patched_login_user(page, context, email):
     page.goto(f"{suite.BASE_URL}/", wait_until="domcontentloaded")
     page.locator("header").wait_for(state="visible", timeout=10_000)
+    wait_for_hydration(page)
 
     sign_in_buttons = page.get_by_role(
         "button", name=re.compile(r"^sign in$", re.IGNORECASE)
@@ -168,6 +177,7 @@ def patched_login_user(page, context, email):
 
 def patched_login_admin(page, context):
     page.goto(f"{suite.BASE_URL}/admin", wait_until="domcontentloaded")
+    wait_for_hydration(page)
     email_input = page.locator("#admin-email")
     password_input = page.locator("#admin-password")
     email_input.wait_for(state="visible")
