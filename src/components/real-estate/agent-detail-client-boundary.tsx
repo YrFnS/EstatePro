@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { AgentDetailPage } from "@/components/real-estate/agent-detail-page";
 import { PageShell } from "@/components/page-shell";
+import { useHydrated } from "@/lib/use-hydrated";
 
 function AgentDetailPlaceholder() {
   return (
@@ -31,13 +31,9 @@ function AgentDetailPlaceholder() {
 }
 
 export function AgentDetailClientBoundary() {
-  const [mounted, setMounted] = useState(false);
+  const hydrated = useHydrated();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
+  if (!hydrated) {
     return <AgentDetailPlaceholder />;
   }
 
