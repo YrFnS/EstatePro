@@ -142,13 +142,16 @@ def route_health(
         page.locator("#message").fill(
             "This message verifies the full EstatePro contact form workflow."
         )
+        contact_form = page.locator("form").filter(
+            has=page.locator("#name")
+        )
 
         with page.expect_response(
             lambda response: response.url.endswith("/api/contact")
             and response.request.method == "POST",
             timeout=suite.DEFAULT_TIMEOUT_MS,
         ) as response_info:
-            page.locator('button[type="submit"]').click()
+            contact_form.locator('button[type="submit"]').click()
 
         response = response_info.value
         submission["statusCode"] = response.status
