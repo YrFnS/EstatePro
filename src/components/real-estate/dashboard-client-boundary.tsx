@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { DashboardPage } from "@/components/real-estate/dashboard-page";
 import { PageShell } from "@/components/page-shell";
+import { useHydrated } from "@/lib/use-hydrated";
 
 function DashboardPlaceholder() {
   return (
@@ -31,13 +31,9 @@ function DashboardPlaceholder() {
 }
 
 export function DashboardClientBoundary() {
-  const [mounted, setMounted] = useState(false);
+  const hydrated = useHydrated();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
+  if (!hydrated) {
     return <DashboardPlaceholder />;
   }
 
