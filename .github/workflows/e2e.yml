@@ -36,6 +36,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/estatepro
       NEXTAUTH_SECRET: estatepro-e2e-nextauth-secret-2026
       ADMIN_AUTH_SECRET: estatepro-e2e-admin-secret-2026
+      ADMIN_COOKIE_SECURE: "false"
       NEXTAUTH_URL: http://127.0.0.1:3000
       APP_URL: http://127.0.0.1:3000
       HOSTNAME: 127.0.0.1
@@ -107,7 +108,7 @@ jobs:
             exit 1
           fi
 
-          python scripts/e2e_estatepro.py
+          python scripts/e2e_estatepro_runner.py
 
       - name: Upload browser evidence
         if: always()
