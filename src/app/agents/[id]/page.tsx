@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { AgentDetailPage } from "@/components/real-estate/agent-detail-page";
-import { PageShell } from "@/components/page-shell";
+import { AgentDetailClientBoundary } from "@/components/real-estate/agent-detail-client-boundary";
 import { db } from "@/lib/db";
 
 export async function generateMetadata({
@@ -12,7 +11,13 @@ export async function generateMetadata({
   try {
     const agent = await db.agent.findUnique({
       where: { id },
-      select: { nameEn: true, titleEn: true, bioEn: true, image: true, specialization: true },
+      select: {
+        nameEn: true,
+        titleEn: true,
+        bioEn: true,
+        image: true,
+        specialization: true,
+      },
     });
     if (!agent) {
       return {
@@ -42,9 +47,5 @@ export async function generateMetadata({
 }
 
 export default function AgentDetailRoute() {
-  return (
-    <PageShell>
-      <AgentDetailPage />
-    </PageShell>
-  );
+  return <AgentDetailClientBoundary />;
 }
