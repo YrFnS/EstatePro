@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import {
+  createElement,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 let hydrated = false;
 const listeners = new Set<() => void>();
@@ -49,14 +54,12 @@ export function HydrationCoordinator() {
     };
   }, []);
 
-  return (
-    <span
-      id="estatepro-hydration-marker"
-      data-state={ready ? "ready" : "pending"}
-      hidden
-      aria-hidden="true"
-    />
-  );
+  return createElement("span", {
+    id: "estatepro-hydration-marker",
+    "data-state": ready ? "ready" : "pending",
+    hidden: true,
+    "aria-hidden": true,
+  });
 }
 
 export function useHydrated(): boolean {
