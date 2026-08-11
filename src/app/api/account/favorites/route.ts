@@ -13,7 +13,10 @@ const replaceSchema = z.object({
 
 async function listFavoriteIds(userId: string): Promise<string[]> {
   const favorites = await db.userFavorite.findMany({
-    where: { userId },
+    where: {
+      userId,
+      property: { listingStatus: "published" },
+    },
     orderBy: { createdAt: "desc" },
     select: { propertyId: true },
   });
@@ -55,19 +58,22 @@ export async function PUT(request: NextRequest) {
     }
 
     const ids = uniqueIds(parsed.data.ids, MAX_FAVORITES);
-    const existingProperties = ids.length
+    const availableProperties = ids.length
       ? await db.property.findMany({
-          where: { id: { in: ids } },
+          where: {
+            id: { in: ids },
+            listingStatus: "published",
+          },
           select: { id: true },
         })
       : [];
-    const existingIds = new Set(
-      existingProperties.map((property) => property.id)
+    const availableIds = new Set(
+      availableProperties.map((property) => property.id)
     );
 
-    if (existingIds.size !== ids.length) {
+    if (availableIds.size !== ids.length) {
       return NextResponse.json(
-        { error: "One or more properties no longer exist" },
+        { error: "One or more properties are unavailable" },
         { status: 404 }
       );
     }
