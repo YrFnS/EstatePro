@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
+import type { Session } from "next-auth";
 import { I18nProvider } from "@/lib/i18n/provider";
 import { ThemeProvider } from "next-themes";
 import { FavoritesProvider } from "@/lib/favorites";
@@ -10,12 +11,19 @@ import { NotificationsProvider } from "@/lib/notifications";
 import { SavedSearchesProvider } from "@/lib/saved-searches";
 import { OpenRouterSettingsProvider } from "@/lib/openrouter-settings";
 import { AuthProvider } from "@/lib/auth-context";
+import { HydrationCoordinator } from "@/lib/use-hydrated";
 import { registerServiceWorker } from "@/lib/pwa";
 import { OfflineIndicator } from "@/components/real-estate/offline-indicator";
 import { InstallPwaBanner } from "@/components/real-estate/install-pwa-banner";
 import { NotificationSync } from "@/components/real-estate/notification-sync";
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({
+  children,
+  session,
+}: {
+  children: ReactNode;
+  session: Session | null;
+}) {
   useEffect(() => {
     registerServiceWorker();
   }, []);
@@ -28,7 +36,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       disableTransitionOnChange
     >
       <I18nProvider>
-        <AuthProvider>
+        <AuthProvider session={session}>
           <OpenRouterSettingsProvider>
             <FavoritesProvider>
               <CompareProvider>
@@ -47,6 +55,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           </OpenRouterSettingsProvider>
         </AuthProvider>
       </I18nProvider>
+      <HydrationCoordinator />
     </ThemeProvider>
   );
 }
