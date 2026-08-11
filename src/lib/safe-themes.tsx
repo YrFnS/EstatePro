@@ -48,12 +48,6 @@ const DEFAULT_CONTEXT: ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue>(DEFAULT_CONTEXT);
 
-function getSystemTheme(): ResolvedTheme {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
-}
-
 function normalizeTheme(
   candidate: string | null | undefined,
   fallback: Theme,
@@ -95,9 +89,10 @@ export function ThemeProvider({
       enableSystem,
       themes
     );
-
-    syncSystemTheme();
-    setThemeState(savedTheme);
+    const initialSyncFrame = window.requestAnimationFrame(() => {
+      syncSystemTheme();
+      setThemeState(savedTheme);
+    });
 
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== storageKey) return;
@@ -109,6 +104,7 @@ export function ThemeProvider({
     media.addEventListener("change", syncSystemTheme);
     window.addEventListener("storage", handleStorage);
     return () => {
+      window.cancelAnimationFrame(initialSyncFrame);
       media.removeEventListener("change", syncSystemTheme);
       window.removeEventListener("storage", handleStorage);
     };
