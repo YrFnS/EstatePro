@@ -32,6 +32,69 @@ def patched_request_failed(self, request):
     )
 
 
+def patched_visit(
+    page,
+    signals,
+    path,
+    persona,
+    *,
+    expected_text=None,
+    screenshot=True,
+):
+    signals.reset()
+    response = page.goto(
+        f"{suite.BASE_URL}{path}",
+        wait_until="domcontentloaded",
+    )
+    suite.require(response is not None, f"No document response for {path}")
+    suite.require(response.status < 400, f"{path} returned {response.status}")
+    page.locator("body").wait_for(state="visible")
+
+    # Authenticated workspaces often validate their protected session after
+    # the document has loaded. Wait for their stable page marker rather than
+    # treating the intentional loading state as missing content.
+    if expected_text:
+        page.get_by_text(expected_text, exact=False).first.wait_for(
+            state="visible",
+            timeout=15_000,
+        )
+    else:
+        page.wait_for_timeout(700)
+
+    body_text = page.locator("body").inner_text()
+    suite.require(
+        not re.search(
+            r"Application error|Internal Server Error|This page could not be found",
+            body_text,
+            re.IGNORECASE,
+        ),
+        f"{path} rendered an application error",
+    )
+
+    runtime = signals.assert_clean(f"{persona} {path}")
+    screenshot_path = None
+    if screenshot:
+        target = suite.SCREENSHOT_DIR / persona / f"{suite.slug(path)}.jpg"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(
+            path=str(target),
+            type="jpeg",
+            quality=65,
+            full_page=True,
+        )
+        screenshot_path = str(target)
+
+    return {
+        "path": path,
+        "statusCode": response.status,
+        "finalUrl": page.url,
+        "title": page.title(),
+        "bodyLength": len(body_text),
+        "runtime": runtime,
+        "screenshot": screenshot_path,
+    }
+
+
 def patched_login_user(page, context, email):
     page.goto(f"{suite.BASE_URL}/", wait_until="domcontentloaded")
 
@@ -129,6 +192,7 @@ def patched_login_admin(page, context):
 
 
 suite.RuntimeSignals._on_request_failed = patched_request_failed
+suite.visit = patched_visit
 suite.login_user = patched_login_user
 suite.login_admin = patched_login_admin
 
