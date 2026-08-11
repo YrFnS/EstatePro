@@ -41,7 +41,7 @@ jobs:
       HOSTNAME: 127.0.0.1
       PORT: "3000"
       E2E_BASE_URL: http://127.0.0.1:3000
-      E2E_PASSWORD: EstatePro123!
+      E2E_PASSWORD: DemoPass!2026
       NODE_OPTIONS: --max-old-space-size=4096
 
     steps:
