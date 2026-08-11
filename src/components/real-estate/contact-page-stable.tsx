@@ -1,6 +1,11 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  useMemo,
+  useState,
+} from "react";
 import {
   AlertCircle,
   Building2,
@@ -14,7 +19,6 @@ import {
   Phone,
   Send,
 } from "lucide-react";
-import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n/provider";
 import { useSiteSettings } from "@/hooks/use-site-settings";
 import { Button } from "@/components/ui/button";
@@ -48,11 +52,18 @@ function safeCoordinate(value: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function focusFormField(id: string) {
+  window.requestAnimationFrame(() => {
+    document.getElementById(id)?.focus({ preventScroll: false });
+  });
+}
+
 export function ContactPageStable() {
   const { t, locale } = useI18n();
   const { getSetting } = useSiteSettings();
   const [form, setForm] = useState<ContactFormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<ContactFormErrors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -87,21 +98,9 @@ export function ContactPageStable() {
   }, [getSetting, locale]);
 
   const contactInfo = [
-    {
-      icon: MapPin,
-      label: t("contact.address"),
-      value: address,
-    },
-    {
-      icon: Phone,
-      label: t("contact.phoneLabel"),
-      value: phone,
-    },
-    {
-      icon: Mail,
-      label: t("contact.emailLabel"),
-      value: email,
-    },
+    { icon: MapPin, label: t("contact.address"), value: address },
+    { icon: Phone, label: t("contact.phoneLabel"), value: phone },
+    { icon: Mail, label: t("contact.emailLabel"), value: email },
     {
       icon: Clock,
       label: t("contact.workingHours"),
@@ -151,6 +150,7 @@ export function ContactPageStable() {
   const updateField = (field: keyof ContactFormState, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
     setSubmitted(false);
+    setSubmitError(null);
     setErrors((current) => {
       if (!current[field]) return current;
       return { ...current, [field]: undefined };
@@ -161,6 +161,7 @@ export function ContactPageStable() {
     event.preventDefault();
     const nextErrors = validate();
     setErrors(nextErrors);
+    setSubmitError(null);
 
     if (Object.keys(nextErrors).length > 0) return;
 
@@ -181,14 +182,19 @@ export function ContactPageStable() {
 
       setForm(EMPTY_FORM);
       setSubmitted(true);
-      toast.success(t("contact.successMessage"));
     } catch (error) {
-      toast.error(
+      setSubmitError(
         error instanceof Error ? error.message : "Failed to send message"
       );
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const openFormAt = (fieldId: string) => {
+    setSubmitted(false);
+    setSubmitError(null);
+    focusFormField(fieldId);
   };
 
   return (
@@ -215,6 +221,8 @@ export function ContactPageStable() {
                 <div
                   className="flex min-h-[430px] flex-col items-center justify-center text-center"
                   data-testid="contact-success"
+                  role="status"
+                  aria-live="polite"
                 >
                   <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
                     <CheckCircle2 className="h-10 w-10 text-primary" />
@@ -226,13 +234,23 @@ export function ContactPageStable() {
                     type="button"
                     variant="outline"
                     className="mt-6 rounded-full"
-                    onClick={() => setSubmitted(false)}
+                    onClick={() => openFormAt("name")}
                   >
                     {isRtl ? "إرسال رسالة أخرى" : "Send another message"}
                   </Button>
                 </div>
               ) : (
                 <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+                  {submitError ? (
+                    <div
+                      className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+                      role="alert"
+                    >
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{submitError}</span>
+                    </div>
+                  ) : null}
+
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <Field
                       id="name"
@@ -351,7 +369,7 @@ export function ContactPageStable() {
                     ) : (
                       <Send className="h-4 w-4" />
                     )}
-                    {t("contact.sendMessage")}
+                    {t("contact.send")}
                   </Button>
                 </form>
               )}
@@ -453,13 +471,7 @@ export function ContactPageStable() {
                 type="button"
                 variant="secondary"
                 className="gap-2 rounded-full"
-                onClick={() =>
-                  toast.success(
-                    isRtl
-                      ? "سيتواصل معك فريقنا قريباً"
-                      : "Our team will reach out soon"
-                  )
-                }
+                onClick={() => openFormAt("phone")}
               >
                 <Phone className="h-4 w-4" />
                 {isRtl ? "اطلب اتصالاً" : "Request a call"}
@@ -468,9 +480,7 @@ export function ContactPageStable() {
                 type="button"
                 variant="outline"
                 className="gap-2 rounded-full border-white/30 text-white hover:bg-white/10 hover:text-white"
-                onClick={() =>
-                  document.getElementById("name")?.focus({ preventScroll: false })
-                }
+                onClick={() => openFormAt("name")}
               >
                 <Mail className="h-4 w-4" />
                 {isRtl ? "أرسل رسالة" : "Send a message"}
@@ -495,8 +505,8 @@ function Field({
   label: string;
   required?: boolean;
   error?: string;
-  trailing?: React.ReactNode;
-  children: React.ReactNode;
+  trailing?: ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="space-y-2">
