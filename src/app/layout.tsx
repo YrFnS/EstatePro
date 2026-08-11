@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import { IBM_Plex_Sans_Arabic } from "next/font/google";
+import { getServerSession } from "next-auth";
+import { Geist, Geist_Mono, IBM_Plex_Sans_Arabic } from "next/font/google";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/providers";
 import { LayoutShell } from "@/components/layout-shell";
+import { authOptions } from "@/lib/auth";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,17 +54,19 @@ export const viewport: Viewport = {
   themeColor: "#D4A853",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getServerSession(authOptions);
+
   return (
     <html lang="en" dir="ltr">
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${ibmPlexArabic.variable} antialiased bg-background text-foreground`}
       >
-        <Providers>
+        <Providers session={session}>
           <LayoutShell>{children}</LayoutShell>
           <Toaster />
         </Providers>
