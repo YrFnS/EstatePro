@@ -23,12 +23,15 @@ function HydrationSafeThemeProvider({
 }) {
   const hydrated = useHydrated();
 
+  if (!hydrated) {
+    return <>{children}</>;
+  }
+
   return (
     <ThemeProvider
       attribute="class"
-      defaultTheme="light"
+      defaultTheme="system"
       enableSystem
-      forcedTheme={hydrated ? undefined : "light"}
       disableTransitionOnChange
     >
       {children}
