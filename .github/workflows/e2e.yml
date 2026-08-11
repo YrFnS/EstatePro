@@ -71,6 +71,7 @@ jobs:
           bun run db:generate
           bun run db:deploy
           SEED_DATABASE=estatepro-demo bun run db:seed
+          bun scripts/prepare-e2e-workers.ts
 
       - name: Install Chromium test runtime
         run: |
@@ -85,7 +86,9 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          mkdir -p artifacts/e2e-playwright
+          mkdir -p artifacts/e2e-playwright/source
+          cp src/components/real-estate/dashboard-page.tsx \
+            artifacts/e2e-playwright/source/dashboard-page.tsx
           bun run start > artifacts/e2e-playwright/server.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
@@ -112,7 +115,7 @@ jobs:
             exit 1
           fi
 
-          python scripts/e2e_estatepro_playwright.py
+          python scripts/e2e_estatepro_runner.py
 
       - name: Upload browser evidence
         if: always()
