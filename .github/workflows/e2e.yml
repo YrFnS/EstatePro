@@ -65,7 +65,7 @@ jobs:
         run: |
           bun run db:generate
           bun run db:deploy
-          bun run db:seed
+          SEED_DATABASE=estatepro-demo bun run db:seed
 
       - name: Install Chromium test runtime
         run: |
