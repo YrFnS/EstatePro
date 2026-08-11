@@ -31,6 +31,20 @@ function sign(encodedPayload: string): string {
     .digest("base64url");
 }
 
+function adminCookiesRequireHttps(): boolean {
+  const configured = process.env.ADMIN_COOKIE_SECURE?.trim().toLowerCase();
+
+  if (["1", "true", "yes", "on"].includes(configured || "")) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off"].includes(configured || "")) {
+    return false;
+  }
+
+  return process.env.NODE_ENV === "production";
+}
+
 export function createAdminSession(input: {
   userId: string;
   email: string;
@@ -105,7 +119,7 @@ export function verifyAdminSession(
 export function adminCookieOptions(httpOnly: boolean) {
   return {
     httpOnly,
-    secure: process.env.NODE_ENV === "production",
+    secure: adminCookiesRequireHttps(),
     sameSite: "strict" as const,
     path: "/",
     maxAge: ADMIN_SESSION_TTL_SECONDS,
