@@ -26,13 +26,15 @@ def wait_for_visible(page, locator, timeout_ms=10_000):
 
 
 def wait_for_hydration(page, timeout_ms=15_000):
-    page.locator("html[data-estatepro-hydrated='true']").wait_for(
+    page.locator(
+        "#estatepro-hydration-marker[data-state='ready']"
+    ).wait_for(
         state="attached",
         timeout=timeout_ms,
     )
-    # Let effects released by the coordinator finish their first commit before
-    # the test reads runtime signals or starts another document navigation.
-    page.wait_for_timeout(100)
+    # The marker appears one animation frame after browser-owned provider state
+    # is released, so all related React commits have settled before assertions.
+    page.wait_for_timeout(50)
 
 
 def patched_request_failed(self, request):
