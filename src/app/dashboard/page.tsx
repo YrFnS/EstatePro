@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { DashboardClientBoundary } from "@/components/real-estate/dashboard-client-boundary";
-import { PageShell } from "@/components/page-shell";
 
 export const metadata: Metadata = {
   title: "Dashboard - EstatePro",
@@ -8,9 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function DashboardRoute() {
-  return (
-    <PageShell>
-      <DashboardClientBoundary />
-    </PageShell>
-  );
+  return <DashboardClientBoundary />;
 }
