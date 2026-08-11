@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { PropertyDetailPage } from "@/components/real-estate/property-detail-page";
+import { PropertyDetailClient } from "@/components/real-estate/property-detail-client";
 import { PageShell } from "@/components/page-shell";
 import { db } from "@/lib/db";
 
@@ -12,7 +12,12 @@ export async function generateMetadata({
   try {
     const property = await db.property.findUnique({
       where: { id },
-      select: { titleEn: true, descriptionEn: true, locationEn: true, images: true },
+      select: {
+        titleEn: true,
+        descriptionEn: true,
+        locationEn: true,
+        images: true,
+      },
     });
     if (!property) {
       return {
@@ -45,7 +50,7 @@ export async function generateMetadata({
 export default function PropertyDetailRoute() {
   return (
     <PageShell>
-      <PropertyDetailPage />
+      <PropertyDetailClient />
     </PageShell>
   );
 }

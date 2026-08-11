@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from urllib.parse import urlparse
 
 import e2e_estatepro_playwright as suite
@@ -11,6 +12,16 @@ def first_visible(locator):
         candidate = locator.nth(index)
         if candidate.is_visible():
             return candidate
+    return None
+
+
+def wait_for_visible(page, locator, timeout_ms=10_000):
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        candidate = first_visible(locator)
+        if candidate is not None:
+            return candidate
+        page.wait_for_timeout(100)
     return None
 
 
@@ -97,18 +108,28 @@ def patched_visit(
 
 def patched_login_user(page, context, email):
     page.goto(f"{suite.BASE_URL}/", wait_until="domcontentloaded")
+    page.locator("header").wait_for(state="visible", timeout=10_000)
 
     sign_in_buttons = page.get_by_role(
         "button", name=re.compile(r"^sign in$", re.IGNORECASE)
     )
-    sign_in_button = first_visible(sign_in_buttons)
+    sign_in_button = wait_for_visible(page, sign_in_buttons)
 
     if sign_in_button is None:
-        page.get_by_role("button", name="Menu").click()
+        menu_button = wait_for_visible(
+            page,
+            page.get_by_role("button", name="Menu"),
+            timeout_ms=3_000,
+        )
+        suite.require(
+            menu_button is not None,
+            "Neither a visible Sign In button nor a mobile Menu button was found",
+        )
+        menu_button.click()
         page.get_by_role(
             "navigation", name="Mobile navigation"
         ).wait_for(state="visible")
-        sign_in_button = first_visible(sign_in_buttons)
+        sign_in_button = wait_for_visible(page, sign_in_buttons, timeout_ms=5_000)
 
     suite.require(sign_in_button is not None, "A visible Sign In button was not found")
     sign_in_button.click()

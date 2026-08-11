@@ -1,12 +1,11 @@
 "use client";
 
-import { DashboardPage } from "@/components/real-estate/dashboard-page";
+import dynamic from "next/dynamic";
 import { PageShell } from "@/components/page-shell";
-import { useHydrated } from "@/lib/use-hydrated";
 
 function DashboardPlaceholder() {
   return (
-    <main
+    <div
       className="min-h-screen bg-background"
       aria-busy="true"
       aria-label="Loading dashboard"
@@ -26,20 +25,25 @@ function DashboardPlaceholder() {
           <div className="h-96 animate-pulse rounded-xl bg-muted" />
         </div>
       </div>
-    </main>
+    </div>
   );
 }
 
-export function DashboardClientBoundary() {
-  const hydrated = useHydrated();
-
-  if (!hydrated) {
-    return <DashboardPlaceholder />;
+const BrowserDashboardPage = dynamic(
+  () =>
+    import("@/components/real-estate/dashboard-page").then(
+      (module) => module.DashboardPage
+    ),
+  {
+    ssr: false,
+    loading: DashboardPlaceholder,
   }
+);
 
+export function DashboardClientBoundary() {
   return (
     <PageShell>
-      <DashboardPage />
+      <BrowserDashboardPage />
     </PageShell>
   );
 }

@@ -1,25 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
+
+const subscribe = () => () => undefined;
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
 
 /**
- * Returns false during server rendering and the browser's first hydration
- * pass, then switches to true on the next animation frame.
- *
- * Keeping the first browser render identical to the server fallback prevents
- * browser-owned state such as localStorage, media queries, and session
- * snapshots from changing markup while React is hydrating it.
+ * Returns false for server rendering and React's first hydration snapshot,
+ * then true for browser-owned renders. React controls the transition so a
+ * timer cannot expose session or storage state while deeper routes are still
+ * being selectively hydrated.
  */
 export function useHydrated(): boolean {
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      setHydrated(true);
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-
-  return hydrated;
+  return useSyncExternalStore(
+    subscribe,
+    getClientSnapshot,
+    getServerSnapshot
+  );
 }

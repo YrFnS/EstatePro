@@ -40,6 +40,13 @@ function getServerSnapshot(): Locale {
   return "en";
 }
 
+function applyDocumentLocale(locale: Locale): void {
+  const direction = locale === "ar" ? "rtl" : "ltr";
+  const root = document.documentElement;
+  root.lang = locale;
+  root.dir = direction;
+}
+
 interface I18nContextType {
   locale: Locale;
   setLocale: (locale: Locale) => void;
@@ -105,6 +112,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== "locale") return;
       const nextLocale: Locale = event.newValue === "ar" ? "ar" : "en";
+      applyDocumentLocale(nextLocale);
       if (currentLocale !== nextLocale) {
         currentLocale = nextLocale;
         notifyListeners();
@@ -118,6 +126,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const setLocale = useCallback((newLocale: Locale) => {
     currentLocale = newLocale;
     window.localStorage.setItem("locale", newLocale);
+    applyDocumentLocale(newLocale);
     notifyListeners();
   }, []);
 
