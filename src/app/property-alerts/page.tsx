@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { PropertyAlertsPage } from "@/components/real-estate/property-alerts-page";
-import { PageShell } from "@/components/page-shell";
+import { PropertyAlertsClientBoundary } from "@/components/real-estate/property-alerts-client-boundary";
 
 export const metadata: Metadata = {
   title: "Property Alerts - EstatePro",
@@ -8,9 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function PropertyAlertsRoute() {
-  return (
-    <PageShell>
-      <PropertyAlertsPage />
-    </PageShell>
-  );
+  return <PropertyAlertsClientBoundary />;
 }
