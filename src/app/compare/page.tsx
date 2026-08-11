@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { ClientHydrationBoundary } from "@/components/client-hydration-boundary";
-import { ComparePage } from "@/components/real-estate/compare-page";
+import { ComparePageClient } from "@/components/real-estate/compare-page-client";
 import { PageShell } from "@/components/page-shell";
 
 export const metadata: Metadata = {
@@ -11,10 +10,8 @@ export const metadata: Metadata = {
 
 export default function CompareRoute() {
   return (
-    <ClientHydrationBoundary label="Loading property comparison">
-      <PageShell>
-        <ComparePage />
-      </PageShell>
-    </ClientHydrationBoundary>
+    <PageShell>
+      <ComparePageClient />
+    </PageShell>
   );
 }

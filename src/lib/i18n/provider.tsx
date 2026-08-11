@@ -41,8 +41,11 @@ function getServerSnapshot(): Locale {
 }
 
 function applyDocumentLocale(locale: Locale): void {
-  document.documentElement.lang = locale;
-  document.documentElement.dir = locale === "ar" ? "rtl" : "ltr";
+  const root = document.documentElement;
+  const direction = locale === "ar" ? "rtl" : "ltr";
+
+  if (root.lang !== locale) root.lang = locale;
+  if (root.dir !== direction) root.dir = direction;
 }
 
 interface I18nContextType {
