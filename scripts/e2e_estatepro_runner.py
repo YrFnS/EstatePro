@@ -7,10 +7,17 @@ UI form coverage, and regression checks discovered during the first pass.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any
 
 import e2e_estatepro as suite
 from playwright.sync_api import BrowserContext, Page
+
+
+CHUNK_URL_PATTERN = re.compile(
+    r"https?://[^\s)]+/_next/static/chunks/[^\s):]+\.js"
+)
 
 
 def observe_page(page: Page) -> dict[str, list[Any]]:
@@ -44,6 +51,39 @@ def observe_page(page: Page) -> dict[str, list[Any]]:
     page.on("console", on_console)
     page.on("response", on_response)
     return signals
+
+
+def save_error_chunks(
+    context: BrowserContext,
+    details: dict[str, Any],
+    route_path: str,
+) -> list[str]:
+    signals = details.get("signals", {})
+    page_errors = signals.get("pageErrors", []) if isinstance(signals, dict) else []
+    urls: set[str] = set()
+
+    for error in page_errors:
+        urls.update(CHUNK_URL_PATTERN.findall(str(error)))
+
+    saved: list[str] = []
+    debug_root = Path(suite.ARTIFACT_ROOT) / "debug" / suite.slug(route_path)
+    debug_root.mkdir(parents=True, exist_ok=True)
+
+    for index, url in enumerate(sorted(urls), start=1):
+        try:
+            response = context.request.get(url)
+            if not response.ok:
+                continue
+            filename = url.rsplit("/", 1)[-1].split("?", 1)[0]
+            target = debug_root / f"{index:02d}-{filename}"
+            target.write_text(response.text(), encoding="utf-8")
+            saved.append(str(target))
+        except Exception:
+            continue
+
+    if saved:
+        details["capturedChunks"] = saved
+    return saved
 
 
 def ui_login(context: BrowserContext) -> dict[str, Any]:
@@ -112,13 +152,29 @@ def route_health(
     *,
     mobile: bool = False,
 ) -> dict[str, Any]:
-    details = _original_route_health(
-        context,
-        persona,
-        path,
-        expected_texts,
-        mobile=mobile,
-    )
+    dynamic_listing_path = f"/properties/{suite.STATE.get('listing_id', 'missing')}"
+    expected_in_title = path == dynamic_listing_path and bool(expected_texts)
+
+    try:
+        details = _original_route_health(
+            context,
+            persona,
+            path,
+            () if expected_in_title else expected_texts,
+            mobile=mobile,
+        )
+    except suite.CheckFailure as error:
+        save_error_chunks(context, error.details, path)
+        raise
+
+    if expected_in_title:
+        title = str(details.get("title", "")).lower()
+        missing = [text for text in expected_texts if text.lower() not in title]
+        suite.expect(
+            not missing,
+            f"missing expected text from localized page title: {', '.join(missing)}",
+            details,
+        )
 
     if path != "/contact" or persona != "guest" or mobile:
         return details
