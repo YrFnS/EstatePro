@@ -3,8 +3,11 @@ name: EstatePro E2E
 on:
   push:
     branches:
-      - agent/estatepro-e2e-hardening
+      - main
+      - agent/e2e-production-hardening
   pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -36,12 +39,14 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/estatepro
       NEXTAUTH_SECRET: estatepro-e2e-nextauth-secret-2026
       ADMIN_AUTH_SECRET: estatepro-e2e-admin-secret-2026
+      CRON_SECRET: estatepro-e2e-cron-secret-2026
       NEXTAUTH_URL: http://127.0.0.1:3000
       APP_URL: http://127.0.0.1:3000
       HOSTNAME: 127.0.0.1
       PORT: "3000"
       E2E_BASE_URL: http://127.0.0.1:3000
       E2E_PASSWORD: DemoPass!2026
+      E2E_ARTIFACT_DIR: artifacts/e2e-playwright
       NODE_OPTIONS: --max-old-space-size=4096
 
     steps:
@@ -80,8 +85,8 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          mkdir -p artifacts/e2e
-          bun run start > artifacts/e2e/server.log 2>&1 &
+          mkdir -p artifacts/e2e-playwright
+          bun run start > artifacts/e2e-playwright/server.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
 
@@ -95,7 +100,7 @@ jobs:
             fi
             if ! kill -0 "$server_pid" 2>/dev/null; then
               echo "EstatePro server exited before becoming ready."
-              cat artifacts/e2e/server.log
+              cat artifacts/e2e-playwright/server.log
               exit 1
             fi
             sleep 2
@@ -103,17 +108,17 @@ jobs:
 
           if [ "$ready" -ne 1 ]; then
             echo "EstatePro server did not become ready."
-            cat artifacts/e2e/server.log
+            cat artifacts/e2e-playwright/server.log
             exit 1
           fi
 
-          python scripts/e2e_estatepro.py
+          python scripts/e2e_estatepro_playwright.py
 
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: estatepro-e2e-${{ github.run_attempt }}
-          path: artifacts/e2e
+          path: artifacts/e2e-playwright
           if-no-files-found: warn
           retention-days: 14
