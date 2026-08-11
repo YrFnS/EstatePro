@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ContactPage } from "@/components/real-estate/contact-page";
+import { ContactPageStable } from "@/components/real-estate/contact-page-stable";
 import { PageShell } from "@/components/page-shell";
 
 export const metadata: Metadata = {
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export default function ContactRoute() {
   return (
     <PageShell>
-      <ContactPage />
+      <ContactPageStable />
     </PageShell>
   );
 }
