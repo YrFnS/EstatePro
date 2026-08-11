@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DashboardPage } from "@/components/real-estate/dashboard-page";
+import { DashboardClientBoundary } from "@/components/real-estate/dashboard-client-boundary";
 import { PageShell } from "@/components/page-shell";
 
 export const metadata: Metadata = {
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function DashboardRoute() {
   return (
     <PageShell>
-      <DashboardPage />
+      <DashboardClientBoundary />
     </PageShell>
   );
 }
