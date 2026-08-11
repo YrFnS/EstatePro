@@ -1,6 +1,12 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import { SessionProvider, signIn, signOut, useSession } from "next-auth/react";
 
 interface AuthUser {
@@ -24,15 +30,26 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function AuthContextInner({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
-  const isLoading = status === "loading";
+  const [mounted, setMounted] = useState(false);
 
-  const user: AuthUser | null = session?.user
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // SessionProvider can resolve a browser session before React hydrates a page,
+  // while the server rendered the same tree without that client-side session.
+  // Keep the first client render identical to the server, then expose the
+  // authenticated account after mount.
+  const sessionUser = mounted ? session?.user : null;
+  const isLoading = !mounted || status === "loading";
+
+  const user: AuthUser | null = sessionUser
     ? {
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.name,
-        role: session.user.role,
-        avatar: session.user.avatar,
+        id: sessionUser.id,
+        email: sessionUser.email,
+        name: sessionUser.name,
+        role: sessionUser.role,
+        avatar: sessionUser.avatar,
       }
     : null;
 
