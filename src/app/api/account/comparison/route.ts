@@ -15,7 +15,10 @@ const replaceSchema = z.object({
 
 async function listComparisonIds(userId: string): Promise<string[]> {
   const items = await db.userComparison.findMany({
-    where: { userId },
+    where: {
+      userId,
+      property: { listingStatus: "published" },
+    },
     orderBy: { position: "asc" },
     select: { propertyId: true },
   });
@@ -60,19 +63,22 @@ export async function PUT(request: NextRequest) {
       parsed.data.ids,
       MAX_COMPARISON_ITEMS
     );
-    const existingProperties = ids.length
+    const availableProperties = ids.length
       ? await db.property.findMany({
-          where: { id: { in: ids } },
+          where: {
+            id: { in: ids },
+            listingStatus: "published",
+          },
           select: { id: true },
         })
       : [];
-    const existingIds = new Set(
-      existingProperties.map((property) => property.id)
+    const availableIds = new Set(
+      availableProperties.map((property) => property.id)
     );
 
-    if (existingIds.size !== ids.length) {
+    if (availableIds.size !== ids.length) {
       return NextResponse.json(
-        { error: "One or more properties no longer exist" },
+        { error: "One or more properties are unavailable" },
         { status: 404 }
       );
     }
