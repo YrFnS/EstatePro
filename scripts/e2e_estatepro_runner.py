@@ -42,14 +42,12 @@ def patched_login_user(page, context, email):
 
     if sign_in_button is None:
         page.get_by_role("button", name="Menu").click()
-        navigation = page.get_by_role(
+        page.get_by_role(
             "navigation", name="Mobile navigation"
-        )
-        navigation.wait_for(state="visible")
-        sign_in_button = navigation.get_by_role(
-            "button", name=re.compile(r"^sign in$", re.IGNORECASE)
-        )
+        ).wait_for(state="visible")
+        sign_in_button = first_visible(sign_in_buttons)
 
+    suite.require(sign_in_button is not None, "A visible Sign In button was not found")
     sign_in_button.click()
 
     email_input = page.locator("#login-email")
