@@ -56,10 +56,10 @@ const accountRoutesByType = {
 };
 
 function watchRuntime(page) {
-  const failures = [];
+  let failures = [];
 
   page.on("pageerror", (error) => {
-    failures.push(`pageerror: ${error.message}`);
+    failures.push(`pageerror at ${page.url()}: ${error.message}`);
   });
 
   page.on("response", (response) => {
@@ -73,9 +73,16 @@ function watchRuntime(page) {
     }
   });
 
-  return async () => {
-    await page.waitForTimeout(250);
-    expect(failures, failures.join("\n")).toEqual([]);
+  return {
+    async assertClean(label) {
+      await page.waitForTimeout(250);
+      const checkpointFailures = failures;
+      failures = [];
+      expect(
+        checkpointFailures,
+        `${label}\n${checkpointFailures.join("\n")}`
+      ).toEqual([]);
+    },
   };
 }
 
@@ -131,9 +138,9 @@ test.describe("guest and public experience", () => {
     test(`guest route ${path} renders without server/runtime errors`, async ({
       page,
     }) => {
-      const assertRuntime = watchRuntime(page);
+      const runtime = watchRuntime(page);
       await openRoute(page, path);
-      await assertRuntime();
+      await runtime.assertClean(`guest ${path}`);
     });
   }
 
@@ -189,9 +196,10 @@ test.describe("authenticated account types", () => {
     test(`${type} authenticates with the expected role and loads its account surfaces`, async ({
       page,
     }) => {
-      const assertRuntime = watchRuntime(page);
+      const runtime = watchRuntime(page);
       const user = await loginThroughDialog(page, account.email);
       expect(user.role).toBe(account.role);
+      await runtime.assertClean(`${type} login`);
 
       for (const url of accountApis) {
         const response = await page.request.get(url);
@@ -203,9 +211,8 @@ test.describe("authenticated account types", () => {
 
       for (const path of accountRoutesByType[type]) {
         await openRoute(page, path);
+        await runtime.assertClean(`${type} ${path}`);
       }
-
-      await assertRuntime();
     });
   }
 
@@ -247,8 +254,9 @@ test.describe("authenticated account types", () => {
 test("admin guard rejects an agent and grants the administrator dashboard and moderation UI", async ({
   page,
 }) => {
-  const assertRuntime = watchRuntime(page);
+  const runtime = watchRuntime(page);
   await openRoute(page, "/admin");
+  await runtime.assertClean("admin login screen");
 
   const emailInput = page.locator("#admin-email");
   const passwordInput = page.locator("#admin-password");
@@ -267,6 +275,7 @@ test("admin guard rejects an agent and grants the administrator dashboard and mo
     .click();
   let loginResponse = await loginResponsePromise;
   expect(loginResponse.status()).toBe(401);
+  await runtime.assertClean("agent rejected from admin login");
 
   await emailInput.fill(accounts.admin.email);
   await passwordInput.fill(DEMO_PASSWORD);
@@ -283,6 +292,7 @@ test("admin guard rejects an agent and grants the administrator dashboard and mo
   expect(loginResponse.status()).toBe(200);
 
   await expect(page.getByRole("heading", { name: /^Overview$/ })).toBeVisible();
+  await runtime.assertClean("administrator dashboard");
 
   for (const url of ["/api/admin/me", "/api/admin/overview"]) {
     const response = await page.request.get(url);
@@ -291,23 +301,25 @@ test("admin guard rejects an agent and grants the administrator dashboard and mo
 
   await openRoute(page, "/admin/moderation");
   await expect(page.locator("body")).toContainText(/Listing moderation/i);
-  await assertRuntime();
+  await runtime.assertClean("administrator moderation");
 });
 
 test("@mobile mobile navigation remains usable and switches to RTL", async ({
   page,
 }) => {
-  const assertRuntime = watchRuntime(page);
+  const runtime = watchRuntime(page);
   await openRoute(page, "/");
+  await runtime.assertClean("mobile home");
 
   await page.getByRole("button", { name: "Menu" }).click();
   const navigation = page.getByRole("navigation", { name: "Mobile navigation" });
   await expect(navigation).toBeVisible();
   await navigation.getByRole("button", { name: /for sale/i }).click();
   await expect(page).toHaveURL(/\/properties\?status=sale/);
+  await runtime.assertClean("mobile for-sale navigation");
 
   await page.getByRole("button", { name: "Menu" }).click();
   await page.getByRole("button", { name: /العربية/ }).click();
   await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
-  await assertRuntime();
+  await runtime.assertClean("mobile RTL switch");
 });
