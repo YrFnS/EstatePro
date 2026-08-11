@@ -40,14 +40,6 @@ function getServerSnapshot(): Locale {
   return "en";
 }
 
-function applyDocumentLocale(locale: Locale): void {
-  const root = document.documentElement;
-  const direction = locale === "ar" ? "rtl" : "ltr";
-
-  if (root.lang !== locale) root.lang = locale;
-  if (root.dir !== direction) root.dir = direction;
-}
-
 interface I18nContextType {
   locale: Locale;
   setLocale: (locale: Locale) => void;
@@ -61,7 +53,11 @@ function getNestedValue(obj: Record<string, unknown>, path: string): string {
   const keys = path.split(".");
   let current: unknown = obj;
   for (const key of keys) {
-    if (current && typeof current === "object" && key in (current as Record<string, unknown>)) {
+    if (
+      current &&
+      typeof current === "object" &&
+      key in (current as Record<string, unknown>)
+    ) {
       current = (current as Record<string, unknown>)[key];
     } else {
       return path;
@@ -101,7 +97,6 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     const saved = window.localStorage.getItem("locale");
     const restoredLocale: Locale = saved === "ar" ? "ar" : "en";
 
-    applyDocumentLocale(restoredLocale);
     if (currentLocale !== restoredLocale) {
       currentLocale = restoredLocale;
       notifyListeners();
@@ -110,7 +105,6 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== "locale") return;
       const nextLocale: Locale = event.newValue === "ar" ? "ar" : "en";
-      applyDocumentLocale(nextLocale);
       if (currentLocale !== nextLocale) {
         currentLocale = nextLocale;
         notifyListeners();
@@ -124,7 +118,6 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const setLocale = useCallback((newLocale: Locale) => {
     currentLocale = newLocale;
     window.localStorage.setItem("locale", newLocale);
-    applyDocumentLocale(newLocale);
     notifyListeners();
   }, []);
 
@@ -145,7 +138,15 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <I18nContext.Provider value={{ locale, setLocale, t, dir }}>
-      {children}
+      <div
+        className="contents"
+        lang={locale}
+        dir={dir}
+        data-locale={locale}
+        data-direction={dir}
+      >
+        {children}
+      </div>
     </I18nContext.Provider>
   );
 }

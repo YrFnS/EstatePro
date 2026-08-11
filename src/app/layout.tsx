@@ -59,13 +59,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      dir="ltr"
-      className="light"
-      style={{ colorScheme: "light" }}
-      suppressHydrationWarning
-    >
+    <html lang="en" dir="ltr">
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${ibmPlexArabic.variable} antialiased bg-background text-foreground`}
       >
