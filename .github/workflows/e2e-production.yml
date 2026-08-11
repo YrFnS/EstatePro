@@ -4,16 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - agent/e2e-production-hardening
-    paths:
-      - "tests/e2e/**"
-      - "playwright.config.cjs"
-      - ".github/workflows/e2e-production.yml"
-      - "vercel.json"
-  pull_request:
-    branches:
       - main
     paths:
+      - "src/**"
       - "tests/e2e/**"
       - "playwright.config.cjs"
       - ".github/workflows/e2e-production.yml"
@@ -23,13 +16,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: estatepro-production-e2e-${{ github.ref }}
+  group: estatepro-production-e2e
   cancel-in-progress: true
 
 jobs:
   browser-e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       E2E_BASE_URL: https://estate-pro-one.vercel.app
       E2E_DEMO_PASSWORD: DemoPass!2026
@@ -47,6 +40,25 @@ jobs:
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+
+      - name: Wait for the production deployment
+        shell: bash
+        run: |
+          ready=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error \
+              "${E2E_BASE_URL}/api/properties?limit=1" \
+              > /dev/null; then
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+
+          if [ "$ready" -ne 1 ]; then
+            echo "EstatePro production did not become ready with a healthy property API."
+            exit 1
+          fi
 
       - name: Run production E2E suite
         run: npx playwright test --config=playwright.config.cjs
