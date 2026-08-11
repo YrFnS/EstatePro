@@ -3,11 +3,10 @@
 import React, {
   createContext,
   useContext,
-  useState,
-  useEffect,
   useCallback,
 } from "react";
 import { SessionProvider, signIn, signOut, useSession } from "next-auth/react";
+import { useHydrated } from "@/lib/use-hydrated";
 
 interface AuthUser {
   id: string;
@@ -30,18 +29,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function AuthContextInner({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const hydrated = useHydrated();
 
   // SessionProvider can resolve a browser session before React hydrates a page,
   // while the server rendered the same tree without that client-side session.
-  // Keep the first client render identical to the server, then expose the
-  // authenticated account after mount.
-  const sessionUser = mounted ? session?.user : null;
-  const isLoading = !mounted || status === "loading";
+  // Keep the first client snapshot identical to the server, then expose the
+  // authenticated account after hydration.
+  const sessionUser = hydrated ? session?.user : null;
+  const isLoading = !hydrated || status === "loading";
 
   const user: AuthUser | null = sessionUser
     ? {
