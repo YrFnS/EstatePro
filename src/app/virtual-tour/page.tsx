@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ClientHydrationBoundary } from "@/components/client-hydration-boundary";
 import { VirtualTourPage } from "@/components/real-estate/virtual-tour-page";
 
 export const metadata: Metadata = {
@@ -8,5 +9,9 @@ export const metadata: Metadata = {
 };
 
 export default function VirtualTourRoute() {
-  return <VirtualTourPage />;
+  return (
+    <ClientHydrationBoundary label="Loading virtual tour">
+      <VirtualTourPage />
+    </ClientHydrationBoundary>
+  );
 }

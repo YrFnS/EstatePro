@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ListingModerationPage } from "@/components/admin/listing-moderation-page";
+import { ClientHydrationBoundary } from "@/components/client-hydration-boundary";
 
 export const metadata: Metadata = {
   title: "Listing Moderation - EstatePro",
@@ -12,5 +13,9 @@ export const metadata: Metadata = {
 };
 
 export default function ListingModerationRoute() {
-  return <ListingModerationPage />;
+  return (
+    <ClientHydrationBoundary label="Loading listing moderation">
+      <ListingModerationPage />
+    </ClientHydrationBoundary>
+  );
 }

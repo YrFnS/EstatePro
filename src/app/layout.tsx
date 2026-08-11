@@ -59,14 +59,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" dir="ltr" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${ibmPlexArabic.variable} antialiased bg-background text-foreground`}
       >
         <Providers>
-          <LayoutShell>
-            {children}
-          </LayoutShell>
+          <LayoutShell>{children}</LayoutShell>
           <Toaster />
         </Providers>
       </body>
