@@ -64,15 +64,40 @@ export async function GET(request: NextRequest) {
     const where = buildPropertyWhere(searchParams);
     const orderBy = buildPropertyOrderBy(searchParams.get("sort"));
     const { page, limit, skip } = getPropertyPagination(searchParams);
+    const include = { agent: { select: agentSelect } } as const;
+
+    // Prisma 6.19 on the production server rejects a zero-valued `skip`
+    // after the optimized Next.js build. Avoid passing zero while preserving
+    // stable offset pagination by reading the first row separately.
+    const propertiesPromise =
+      skip === 0
+        ? (async () => {
+            const first = await db.property.findFirst({
+              where,
+              orderBy,
+              include,
+            });
+            if (!first || limit === 1) return first ? [first] : [];
+
+            const rest = await db.property.findMany({
+              where,
+              orderBy,
+              skip: 1,
+              take: limit - 1,
+              include,
+            });
+            return [first, ...rest];
+          })()
+        : db.property.findMany({
+            where,
+            orderBy,
+            skip,
+            take: limit,
+            include,
+          });
 
     const [properties, total] = await Promise.all([
-      db.property.findMany({
-        where,
-        orderBy,
-        skip,
-        take: limit,
-        include: { agent: { select: agentSelect } },
-      }),
+      propertiesPromise,
       db.property.count({ where }),
     ]);
 
