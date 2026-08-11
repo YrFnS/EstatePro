@@ -10,6 +10,10 @@ type Messages = typeof en;
 
 const messagesMap: Record<Locale, Messages> = { en, ar };
 
+const MESSAGE_KEY_ALIASES: Record<string, string> = {
+  "contact.sendMessage": "contact.send",
+};
+
 let currentLocale: Locale = "en";
 const listeners = new Set<() => void>();
 
@@ -66,6 +70,30 @@ function getNestedValue(obj: Record<string, unknown>, path: string): string {
   return typeof current === "string" ? current : path;
 }
 
+function getMessage(locale: Locale, requestedKey: string): string {
+  const key = MESSAGE_KEY_ALIASES[requestedKey] || requestedKey;
+  const localized = getNestedValue(
+    messagesMap[locale] as unknown as Record<string, unknown>,
+    key
+  );
+
+  if (localized !== key) {
+    return localized;
+  }
+
+  if (locale !== "en") {
+    const english = getNestedValue(
+      messagesMap.en as unknown as Record<string, unknown>,
+      key
+    );
+    if (english !== key) {
+      return english;
+    }
+  }
+
+  return requestedKey;
+}
+
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const locale = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
@@ -81,7 +109,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   const t = useCallback(
     (key: string, params?: Record<string, string | number>): string => {
-      let value = getNestedValue(messagesMap[locale] as unknown as Record<string, unknown>, key);
+      let value = getMessage(locale, key);
       if (params) {
         Object.entries(params).forEach(([k, v]) => {
           value = value.replace(`{${k}}`, String(v));
