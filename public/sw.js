@@ -1,4 +1,4 @@
-const CACHE_NAME = "estatepro-static-v2";
+const CACHE_NAME = "estatepro-static-v3";
 const STATIC_ASSETS = [
   "/manifest.json",
   "/icons/icon-192x192.png",
@@ -15,13 +15,15 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-        )
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter(
+            (key) => key.startsWith("estatepro-") && key !== CACHE_NAME
+          )
+          .map((key) => caches.delete(key))
       )
+    )
   );
   self.clients.claim();
 });
@@ -32,35 +34,38 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
 
-  // Never intercept cross-origin, API, authentication, admin, or user-page requests.
-  // Private responses must remain under the browser's normal HTTP cache controls.
+  // Application HTML, React Server Component requests, APIs, and Next.js
+  // build assets must stay under the browser/CDN cache controls. Caching any
+  // of these in a long-lived service-worker cache can combine HTML from one
+  // deployment with JavaScript from another and break React hydration.
   if (
     url.origin !== self.location.origin ||
     url.pathname.startsWith("/api/") ||
-    url.pathname.startsWith("/admin") ||
-    url.pathname.startsWith("/dashboard") ||
-    url.pathname.startsWith("/messaging") ||
-    url.pathname.startsWith("/settings") ||
-    url.pathname.startsWith("/my-tours") ||
-    url.pathname.startsWith("/notifications")
+    url.pathname.startsWith("/_next/") ||
+    request.mode === "navigate" ||
+    request.destination === "document" ||
+    request.destination === "script" ||
+    request.destination === "style" ||
+    request.destination === "font"
   ) {
     return;
   }
 
-  const cacheableDestination = ["style", "script", "image", "font", "manifest"].includes(
-    request.destination
-  );
-  if (!cacheableDestination) return;
+  const isStaticAsset =
+    STATIC_ASSETS.includes(url.pathname) || request.destination === "image";
+  if (!isStaticAsset) return;
 
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const networkRequest = fetch(request).then((response) => {
-        if (response.ok && response.type === "basic") {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        }
-        return response;
-      });
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cached = await cache.match(request);
+      const networkRequest = fetch(request)
+        .then((response) => {
+          if (response.ok && response.type === "basic") {
+            void cache.put(request, response.clone());
+          }
+          return response;
+        })
+        .catch(() => cached);
 
       return cached || networkRequest;
     })

@@ -1,0 +1,75 @@
+name: Production E2E
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "tests/e2e/**"
+      - "playwright.config.cjs"
+      - ".github/workflows/e2e-production.yml"
+      - "vercel.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: estatepro-production-e2e
+  cancel-in-progress: true
+
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      E2E_BASE_URL: https://estate-pro-one.vercel.app
+      E2E_DEMO_PASSWORD: DemoPass!2026
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Playwright test runner
+        run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Wait for the production deployment
+        shell: bash
+        run: |
+          ready=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error \
+              "${E2E_BASE_URL}/api/properties?limit=1" \
+              > /dev/null; then
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+
+          if [ "$ready" -ne 1 ]; then
+            echo "EstatePro production did not become ready with a healthy property API."
+            exit 1
+          fi
+
+      - name: Run production E2E suite
+        run: npx playwright test --config=playwright.config.cjs
+
+      - name: Upload Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: estatepro-production-e2e-${{ github.run_attempt }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7

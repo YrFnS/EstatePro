@@ -26,6 +26,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "next-themes": [
+        "./src/lib/safe-themes.tsx"
       ]
     }
   },

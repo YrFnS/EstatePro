@@ -2,7 +2,7 @@ name: Publish scheduled listings
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
     inputs:
       limit:
@@ -37,7 +37,7 @@ jobs:
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::DATABASE_URL is not configured; scheduled listing publication was skipped."
+            echo "::error::DATABASE_URL is not configured; scheduled listing publication cannot run."
           fi
 
       - name: Set up Bun
@@ -57,3 +57,7 @@ jobs:
       - name: Publish due listings
         if: steps.configuration.outputs.configured == 'true'
         run: bun run listings:publish
+
+      - name: Fail when the scheduler is not configured
+        if: steps.configuration.outputs.configured != 'true'
+        run: exit 1

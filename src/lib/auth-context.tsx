@@ -1,6 +1,12 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useCallback,
+  type ReactNode,
+} from "react";
+import type { Session } from "next-auth";
 import { SessionProvider, signIn, signOut, useSession } from "next-auth/react";
 
 interface AuthUser {
@@ -15,24 +21,31 @@ interface AuthContextType {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (
+    email: string,
+    password: string
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (
+    name: string,
+    email: string,
+    password: string
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function AuthContextInner({ children }: { children: React.ReactNode }) {
+function AuthContextInner({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession();
-  const isLoading = status === "loading";
+  const sessionUser = session?.user;
 
-  const user: AuthUser | null = session?.user
+  const user: AuthUser | null = sessionUser
     ? {
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.name,
-        role: session.user.role,
-        avatar: session.user.avatar,
+        id: sessionUser.id,
+        email: sessionUser.email,
+        name: sessionUser.name,
+        role: sessionUser.role,
+        avatar: sessionUser.avatar,
       }
     : null;
 
@@ -58,47 +71,71 @@ function AuthContextInner({ children }: { children: React.ReactNode }) {
     await signOut({ redirect: false });
   }, []);
 
-  const register = useCallback(async (name: string, email: string, password: string) => {
-    try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
-      });
+  const register = useCallback(
+    async (name: string, email: string, password: string) => {
+      try {
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, password }),
+        });
 
-      const data = await res.json();
+        const data = await res.json();
 
-      if (!res.ok) {
-        return { success: false, error: data.error || "Registration failed" };
+        if (!res.ok) {
+          return {
+            success: false,
+            error: data.error || "Registration failed",
+          };
+        }
+
+        const loginResult = await signIn("credentials", {
+          email,
+          password,
+          redirect: false,
+        });
+
+        if (loginResult?.error) {
+          return { success: true };
+        }
+
+        return { success: true };
+      } catch {
+        return { success: false, error: "Registration failed" };
       }
-
-      // Auto-login after successful registration
-      const loginResult = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (loginResult?.error) {
-        return { success: true }; // Registration succeeded but auto-login failed
-      }
-
-      return { success: true };
-    } catch {
-      return { success: false, error: "Registration failed" };
-    }
-  }, []);
+    },
+    []
+  );
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout, register }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: Boolean(user),
+        isLoading: status === "loading",
+        login,
+        logout,
+        register,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({
+  children,
+  session,
+}: {
+  children: ReactNode;
+  session: Session | null;
+}) {
   return (
-    <SessionProvider>
+    <SessionProvider
+      session={session}
+      refetchInterval={0}
+      refetchOnWindowFocus={false}
+    >
       <AuthContextInner>{children}</AuthContextInner>
     </SessionProvider>
   );

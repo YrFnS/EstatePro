@@ -2,7 +2,7 @@ name: Process property alerts
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "3,18,33,48 * * * *"
   workflow_dispatch:
     inputs:
       limit:
@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: property-alerts
+  group: estatepro-property-alerts
   cancel-in-progress: false
 
 jobs:
@@ -24,7 +24,6 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       ALERT_PROCESS_LIMIT: ${{ inputs.limit || '250' }}
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -37,7 +36,7 @@ jobs:
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::DATABASE_URL is not configured; property alert processing was skipped."
+            echo "::error::DATABASE_URL is not configured; property alert processing cannot run."
           fi
 
       - name: Set up Bun
@@ -57,3 +56,7 @@ jobs:
       - name: Process due property alerts
         if: steps.configuration.outputs.configured == 'true'
         run: bun run alerts:process
+
+      - name: Fail when the scheduler is not configured
+        if: steps.configuration.outputs.configured != 'true'
+        run: exit 1

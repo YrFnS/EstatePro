@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ComparePage } from "@/components/real-estate/compare-page";
+import { ComparePageClient } from "@/components/real-estate/compare-page-client";
 import { PageShell } from "@/components/page-shell";
 
 export const metadata: Metadata = {
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function CompareRoute() {
   return (
     <PageShell>
-      <ComparePage />
+      <ComparePageClient />
     </PageShell>
   );
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ClientHydrationBoundary } from "@/components/client-hydration-boundary";
 import { PageShell } from "@/components/page-shell";
 import { MyListingsPage } from "@/components/real-estate/my-listings-page";
 
@@ -14,8 +15,10 @@ export const metadata: Metadata = {
 
 export default function MyListingsRoute() {
   return (
-    <PageShell>
-      <MyListingsPage />
-    </PageShell>
+    <ClientHydrationBoundary label="Loading your listings">
+      <PageShell>
+        <MyListingsPage />
+      </PageShell>
+    </ClientHydrationBoundary>
   );
 }

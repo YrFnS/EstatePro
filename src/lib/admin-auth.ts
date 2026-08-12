@@ -31,6 +31,20 @@ function sign(encodedPayload: string): string {
     .digest("base64url");
 }
 
+function shouldUseSecureCookies(): boolean {
+  const configuredOrigin = process.env.APP_URL || process.env.NEXTAUTH_URL;
+
+  if (configuredOrigin) {
+    try {
+      return new URL(configuredOrigin).protocol === "https:";
+    } catch {
+      // Fall back to the runtime environment when the configured origin is invalid.
+    }
+  }
+
+  return process.env.NODE_ENV === "production";
+}
+
 export function createAdminSession(input: {
   userId: string;
   email: string;
@@ -105,7 +119,7 @@ export function verifyAdminSession(
 export function adminCookieOptions(httpOnly: boolean) {
   return {
     httpOnly,
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookies(),
     sameSite: "strict" as const,
     path: "/",
     maxAge: ADMIN_SESSION_TTL_SECONDS,

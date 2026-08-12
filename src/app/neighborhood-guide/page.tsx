@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ClientHydrationBoundary } from "@/components/client-hydration-boundary";
 import { NeighborhoodGuidePage } from "@/components/real-estate/neighborhood-guide-page";
 import { PageShell } from "@/components/page-shell";
 
@@ -10,8 +11,10 @@ export const metadata: Metadata = {
 
 export default function NeighborhoodGuideRoute() {
   return (
-    <PageShell>
-      <NeighborhoodGuidePage />
-    </PageShell>
+    <ClientHydrationBoundary label="Loading neighborhood guide">
+      <PageShell>
+        <NeighborhoodGuidePage />
+      </PageShell>
+    </ClientHydrationBoundary>
   );
 }
